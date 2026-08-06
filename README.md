@@ -36,8 +36,13 @@ flutter run --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_KEY=...
 
 数据库表结构在 `supabase/migrations/`，新项目按顺序在 Supabase SQL Editor 里跑这些 SQL。
 
-免费版项目闲置约 7 天会暂停；`scripts/supabase_keepalive.ps1`（由 Windows 计划任务
-每天运行）会 ping 一次保活。
+免费版项目闲置约 7 天会暂停。仓库里的 `.github/workflows/keepalive.yml` 会在云端
+**每天自动 ping 一次**保活（不依赖任何机器开机）；`scripts/supabase_keepalive.ps1`
+是等效的本地脚本，需要时可手动运行。
+
+## 持续集成
+
+`.github/workflows/ci.yml`：每次 push / PR 自动跑 `flutter analyze` + `flutter test`。
 
 ## 目录结构
 
