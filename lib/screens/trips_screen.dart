@@ -122,9 +122,15 @@ class _TripCard extends StatelessWidget {
                       children: [
                         Icon(Icons.event, size: 14, color: theme.hintColor),
                         const SizedBox(width: 4),
-                        Text(dates,
-                            style: TextStyle(
-                                fontSize: 12, color: theme.hintColor)),
+                        // Flexible + ellipsis: on a narrow phone the date range
+                        // gives way rather than overflowing the card row.
+                        Flexible(
+                          child: Text(dates,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 12, color: theme.hintColor)),
+                        ),
                         const SizedBox(width: 12),
                         Icon(Icons.notes, size: 14, color: theme.hintColor),
                         const SizedBox(width: 4),
