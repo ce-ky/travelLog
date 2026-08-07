@@ -171,6 +171,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        // Web Mercator draws the whole world 256 * 2^zoom px tall, so keeping it
+        // covering the viewport height — no grey band above or below — means the
+        // zoom can't drop below log2(viewportHeight / 256). Recomputed on resize.
+        final h = constraints.maxHeight.isFinite && constraints.maxHeight > 0
+            ? constraints.maxHeight
+            : 600.0;
+        final minZoom = math.max(0.0, math.log(h / 256) / math.ln2);
         return MouseRegion(
           onHover: (e) {
             _hover.value = (_zoom >= _addZoom &&
@@ -187,6 +194,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               options: MapOptions(
                 initialCenter: center,
                 initialZoom: 5,
+                // Can't zoom out past the point where the map fills the window
+                // vertically (top & bottom edges flush with the page).
+                minZoom: minZoom,
                 onTap: (_, point) {
                   // An open popup (preview or add form) gets dismissed first.
                   if (_selected != null || _addingPoint != null) {
