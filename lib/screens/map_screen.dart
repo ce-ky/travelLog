@@ -31,6 +31,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// from the layers button in the bottom-left corner.
   int _styleIndex = 0;
 
+  /// Hides the place-name label overlay on styles that ship one as a separate
+  /// layer (the CARTO family); baked-label styles ignore it.
+  bool _labelsHidden = false;
+
   /// Mouse hover position over the map (desktop/web), for the "click to add"
   /// hint shown once zoomed in enough. A notifier so moving the mouse rebuilds
   /// only the hint, not the whole map.
@@ -240,6 +244,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   userAgentPackageName: 'com.example.travel_log',
                   tileProvider: widget.tileProvider,
                 ),
+                // Transparent place-name overlay for styles that ship one, sat
+                // above the base map but below the trip lines and markers. The
+                // "hide labels" toggle simply drops this layer.
+                if (style.labelsUrlTemplate != null && !_labelsHidden)
+                  TileLayer(
+                    urlTemplate: style.labelsUrlTemplate!,
+                    subdomains: style.subdomains,
+                    maxNativeZoom: style.maxNativeZoom,
+                    userAgentPackageName: 'com.example.travel_log',
+                    tileProvider: widget.tileProvider,
+                  ),
                 // Per-record lines only make sense when records are shown.
                 if (!_collapsed && polylines.isNotEmpty)
                   PolylineLayer(polylines: polylines),
@@ -330,10 +345,22 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             Positioned(
               left: 16,
               bottom: 16,
-              child: _StyleSwitcher(
-                styles: _mapStyles,
-                selected: _styleIndex,
-                onSelect: (i) => setState(() => _styleIndex = i),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _StyleSwitcher(
+                    styles: _mapStyles,
+                    selected: _styleIndex,
+                    onSelect: (i) => setState(() => _styleIndex = i),
+                  ),
+                  const SizedBox(width: 10),
+                  _LabelToggle(
+                    hidden: _labelsHidden,
+                    enabled: style.labelsUrlTemplate != null,
+                    onTap: () =>
+                        setState(() => _labelsHidden = !_labelsHidden),
+                  ),
+                ],
               ),
             ),
             Positioned(
@@ -787,6 +814,11 @@ class _BubblePainter extends CustomPainter {
 class _MapStyle {
   final String label;
   final String urlTemplate;
+
+  /// A transparent labels-only overlay for this style, or null if the style
+  /// bakes labels into its tiles (or has none). Its presence is what lets the
+  /// place names be hidden independently of the base map.
+  final String? labelsUrlTemplate;
   final List<String> subdomains;
 
   /// Highest zoom the provider actually ships tiles for; beyond it flutter_map
@@ -797,6 +829,7 @@ class _MapStyle {
   const _MapStyle({
     required this.label,
     required this.urlTemplate,
+    this.labelsUrlTemplate,
     this.subdomains = const [],
     this.maxNativeZoom = 19,
     required this.attribution,
@@ -814,14 +847,20 @@ const _mapStyles = <_MapStyle>[
   ),
   _MapStyle(
     label: '浅色',
-    urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+    urlTemplate:
+        'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png',
+    labelsUrlTemplate:
+        'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png',
     subdomains: ['a', 'b', 'c', 'd'],
     maxNativeZoom: 20,
     attribution: '© OpenStreetMap contributors © CARTO',
   ),
   _MapStyle(
     label: '深色',
-    urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+    urlTemplate:
+        'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
+    labelsUrlTemplate:
+        'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png',
     subdomains: ['a', 'b', 'c', 'd'],
     maxNativeZoom: 20,
     attribution: '© OpenStreetMap contributors © CARTO',
@@ -829,7 +868,9 @@ const _mapStyles = <_MapStyle>[
   _MapStyle(
     label: '彩色',
     urlTemplate:
-        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+    labelsUrlTemplate:
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
     subdomains: ['a', 'b', 'c', 'd'],
     maxNativeZoom: 20,
     attribution: '© OpenStreetMap contributors © CARTO',
@@ -945,6 +986,53 @@ class _StyleSwitcherState extends State<_StyleSwitcher> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The "hide place names" toggle beside the style switcher. Disabled for styles
+/// that bake labels into their tiles (or carry none), which can't be split.
+class _LabelToggle extends StatelessWidget {
+  final bool hidden;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _LabelToggle({
+    required this.hidden,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = !enabled
+        ? theme.disabledColor
+        : (hidden
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurfaceVariant);
+
+    return Tooltip(
+      message: !enabled
+          ? '该底图无法单独隐藏地名'
+          : (hidden ? '显示地名' : '隐藏地名'),
+      child: Material(
+        color: theme.colorScheme.surface,
+        elevation: 3,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: Icon(
+              hidden ? Icons.label_off_outlined : Icons.label_outline,
+              color: color,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
