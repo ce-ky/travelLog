@@ -58,6 +58,11 @@ jobs:
         run: touch build/web/.nojekyll
 
       - uses: actions/configure-pages@v5
+        with:
+          # Provision the Pages site automatically if it isn't enabled yet, so
+          # the first deploy doesn't require flipping Settings → Pages by hand.
+          # Works because this job is granted `pages: write` above.
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
