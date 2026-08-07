@@ -27,6 +27,10 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   final MapController _map = MapController();
 
+  /// Selected base-map style (index into [_mapStyles]); switchable at runtime
+  /// from the layers button in the bottom-left corner.
+  int _styleIndex = 0;
+
   /// Mouse hover position over the map (desktop/web), for the "click to add"
   /// hint shown once zoomed in enough. A notifier so moving the mouse rebuilds
   /// only the hint, not the whole map.
@@ -169,6 +173,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       ));
     });
 
+    final style = _mapStyles[_styleIndex];
+
     return LayoutBuilder(
       builder: (context, constraints) {
         // Web Mercator draws the whole world 256 * 2^zoom px tall, so keeping it
@@ -228,7 +234,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: style.urlTemplate,
+                  subdomains: style.subdomains,
+                  maxNativeZoom: style.maxNativeZoom,
                   userAgentPackageName: 'com.example.travel_log',
                   tileProvider: widget.tileProvider,
                 ),
@@ -317,6 +325,35 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   ),
                 );
               },
+            ),
+            // Base-map style switcher (bottom-left) + live attribution.
+            Positioned(
+              left: 16,
+              bottom: 16,
+              child: _StyleSwitcher(
+                styles: _mapStyles,
+                selected: _styleIndex,
+                onSelect: (i) => setState(() => _styleIndex = i),
+              ),
+            ),
+            Positioned(
+              right: 8,
+              bottom: 6,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Text(style.attribution,
+                        style: const TextStyle(
+                            fontSize: 9, color: Colors.black54)),
+                  ),
+                ),
+              ),
             ),
           ],
           ),
@@ -743,4 +780,171 @@ class _BubblePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BubblePainter old) => old.tailHeight != tailHeight;
+}
+
+/// A selectable base-map tile style. All entries here are free and keyless; the
+/// `attribution` string is the credit each provider's terms require on screen.
+class _MapStyle {
+  final String label;
+  final String urlTemplate;
+  final List<String> subdomains;
+
+  /// Highest zoom the provider actually ships tiles for; beyond it flutter_map
+  /// upscales the last real tiles instead of requesting missing ones.
+  final int maxNativeZoom;
+  final String attribution;
+
+  const _MapStyle({
+    required this.label,
+    required this.urlTemplate,
+    this.subdomains = const [],
+    this.maxNativeZoom = 19,
+    required this.attribution,
+  });
+}
+
+/// The switchable base maps. URLs verified against each provider's current
+/// keyless raster endpoint; order is the order shown in the picker.
+const _mapStyles = <_MapStyle>[
+  _MapStyle(
+    label: '标准',
+    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    maxNativeZoom: 19,
+    attribution: '© OpenStreetMap contributors',
+  ),
+  _MapStyle(
+    label: '浅色',
+    urlTemplate: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c', 'd'],
+    maxNativeZoom: 20,
+    attribution: '© OpenStreetMap contributors © CARTO',
+  ),
+  _MapStyle(
+    label: '深色',
+    urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c', 'd'],
+    maxNativeZoom: 20,
+    attribution: '© OpenStreetMap contributors © CARTO',
+  ),
+  _MapStyle(
+    label: '彩色',
+    urlTemplate:
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c', 'd'],
+    maxNativeZoom: 20,
+    attribution: '© OpenStreetMap contributors © CARTO',
+  ),
+  _MapStyle(
+    label: '卫星',
+    urlTemplate:
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    maxNativeZoom: 19,
+    attribution: 'Tiles © Esri, Maxar, Earthstar Geographics',
+  ),
+  _MapStyle(
+    label: '地形',
+    urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c'],
+    maxNativeZoom: 17,
+    attribution: '© OpenStreetMap · SRTM | © OpenTopoMap (CC-BY-SA)',
+  ),
+  _MapStyle(
+    label: '骑行',
+    urlTemplate:
+        'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c'],
+    maxNativeZoom: 20,
+    attribution: '© OpenStreetMap contributors · CyclOSM',
+  ),
+];
+
+/// The layers button (bottom-left of the map) that expands a list of base-map
+/// styles and switches between them.
+class _StyleSwitcher extends StatefulWidget {
+  final List<_MapStyle> styles;
+  final int selected;
+  final ValueChanged<int> onSelect;
+
+  const _StyleSwitcher({
+    required this.styles,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  @override
+  State<_StyleSwitcher> createState() => _StyleSwitcherState();
+}
+
+class _StyleSwitcherState extends State<_StyleSwitcher> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_open)
+          Container(
+            width: 132,
+            margin: const EdgeInsets.only(bottom: 10),
+            child: Material(
+              elevation: 4,
+              borderRadius: BorderRadius.circular(12),
+              clipBehavior: Clip.antiAlias,
+              color: theme.colorScheme.surface,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < widget.styles.length; i++)
+                    InkWell(
+                      onTap: () {
+                        widget.onSelect(i);
+                        setState(() => _open = false);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        child: Row(
+                          children: [
+                            Icon(
+                              i == widget.selected
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                              size: 16,
+                              color: i == widget.selected
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(widget.styles[i].label,
+                                style: theme.textTheme.bodyMedium),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        Material(
+          color: theme.colorScheme.surface,
+          elevation: 3,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => setState(() => _open = !_open),
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Icon(Icons.layers_outlined,
+                  color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
