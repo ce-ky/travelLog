@@ -1,0 +1,75 @@
+name: Deploy web to GitHub Pages
+
+# Builds the Flutter web app and publishes it to GitHub Pages, giving a fixed
+# URL you can open on any device to review the app — no local port needed:
+#   https://ce-ky.github.io/travellog/
+#
+# Runs automatically on every push to main. It also accepts a manual run
+# (workflow_dispatch) on any branch, so a work-in-progress branch can be
+# previewed before it is merged. Whatever ran last is what the site shows —
+# there is only one published site.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: the job only needs to read the code and publish to Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time. Don't cancel a running deploy — let it finish so the
+# published site is never left half-written.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.7
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # base-href must match the repo path and start & end with a slash, or the
+      # published page can't find its own assets under /travellog/.
+      - name: Build web
+        run: flutter build web --release --base-href /travellog/
+
+      # The app is a single-page app: a hard refresh on a sub-path would 404 on
+      # Pages. Serving index.html as the 404 page hands routing back to Flutter.
+      - name: SPA fallback
+        run: cp build/web/index.html build/web/404.html
+
+      # Tells Jekyll (Pages' default processor) to leave the build alone — Flutter
+      # ships files starting with "_" that Jekyll would otherwise drop.
+      - name: Disable Jekyll
+        run: touch build/web/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
