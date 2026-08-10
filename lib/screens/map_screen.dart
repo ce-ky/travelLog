@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -45,6 +46,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// Drives the short zoom-in animation on a map tap.
   AnimationController? _moveController;
 
+  /// Target zoom of an in-flight mouse-wheel zoom, so quick successive notches
+  /// accumulate instead of each re-reading the mid-animation zoom. Null when no
+  /// wheel zoom is currently settling.
+  double? _wheelTargetZoom;
+
+  /// Zoom change per unit of scroll-wheel delta — flutter_map's own default
+  /// (`scrollWheelVelocity`), kept so the sensitivity is unchanged; only the
+  /// easing below is new.
+  static const double _wheelZoomPerScroll = 0.005;
+
+  /// Ceiling for wheel zoom. The map sets no `maxZoom`, so this just keeps the
+  /// eased animation from chasing an unbounded target on a long scroll.
+  static const double _wheelMaxZoom = 20;
+
   @override
   void dispose() {
     _moveController?.dispose();
@@ -53,8 +68,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   /// Smoothly zooms/pans to [dest] at [destZoom] by interpolating the camera —
-  /// flutter_map's own [MapController.move] is instant.
-  void _animatedMove(LatLng dest, double destZoom) {
+  /// flutter_map's own [MapController.move] is instant. [onArrived] fires once
+  /// the glide settles (used by the wheel handler to clear its pending target).
+  void _animatedMove(
+    LatLng dest,
+    double destZoom, {
+    Duration duration = const Duration(milliseconds: 300),
+    VoidCallback? onArrived,
+  }) {
     final startCenter = _map.camera.center;
     final startZoom = _map.camera.zoom;
     final latTween =
@@ -64,10 +85,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     final zoomTween = Tween(begin: startZoom, end: destZoom);
 
     _moveController?.dispose();
-    final controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
+    final controller = AnimationController(vsync: this, duration: duration);
     _moveController = controller;
     final curve = CurvedAnimation(parent: controller, curve: Curves.easeOutCubic);
 
@@ -81,9 +99,32 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       if (status == AnimationStatus.completed) {
         controller.dispose();
         if (_moveController == controller) _moveController = null;
+        onArrived?.call();
       }
     });
     controller.forward();
+  }
+
+  /// Handles a mouse-wheel / trackpad scroll as an *eased* zoom toward the
+  /// cursor, giving the "slight inertia" glide that flutter_map's built-in
+  /// (instant, per-notch) scroll-wheel zoom lacks. Successive notches build on
+  /// [_wheelTargetZoom] so a fast scroll still zooms the full distance, and
+  /// [MapCamera.focusedZoomCenter] keeps the point under the cursor pinned —
+  /// same focal behaviour as the native handler we replaced.
+  void _onWheelZoom(PointerScrollEvent event, double minZoom) {
+    final base = _wheelTargetZoom ?? _map.camera.zoom;
+    final target = (base - event.scrollDelta.dy * _wheelZoomPerScroll)
+        .clamp(minZoom, _wheelMaxZoom)
+        .toDouble();
+    _wheelTargetZoom = target;
+    final cursor = math.Point<double>(
+        event.localPosition.dx, event.localPosition.dy);
+    _animatedMove(
+      _map.camera.focusedZoomCenter(cursor, target),
+      target,
+      duration: const Duration(milliseconds: 220),
+      onArrived: () => _wheelTargetZoom = null,
+    );
   }
 
   /// The entry whose preview popup is shown, if any.
@@ -135,6 +176,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     });
     final loc = entry.location;
     if (loc != null) {
+      _wheelTargetZoom = null;
       _animatedMove(loc.latLng, math.max(_zoom, _recordZoom + 4).toDouble());
     }
   }
@@ -250,7 +292,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             ? constraints.maxHeight
             : 600.0;
         final minZoom = math.max(0.0, math.log(h / 256) / math.ln2);
-        return MouseRegion(
+        return Listener(
+          // Scroll wheel / trackpad zoom, eased for a slight inertia glide.
+          onPointerSignal: (signal) {
+            if (signal is PointerScrollEvent && signal.scrollDelta.dy != 0) {
+              _onWheelZoom(signal, minZoom);
+            }
+          },
+          child: MouseRegion(
           onHover: (e) {
             _hover.value = (_zoom >= _addZoom &&
                     _selected == null &&
@@ -269,6 +318,16 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 // Can't zoom out past the point where the map fills the window
                 // vertically (top & bottom edges flush with the page).
                 minZoom: minZoom,
+                interactionOptions: const InteractionOptions(
+                  // Drop the built-in scroll-wheel zoom (instant, per-notch);
+                  // it's replaced below with an eased, cursor-focused glide.
+                  flags: InteractiveFlag.all & ~InteractiveFlag.scrollWheelZoom,
+                  // Race the multi-finger gestures so a two-finger pinch that
+                  // crosses the zoom threshold *wins* and locks out rotation —
+                  // no more accidental spin while zooming. (Fling inertia stays
+                  // on via InteractiveFlag.flingAnimation, at its defaults.)
+                  enableMultiFingerGestureRace: true,
+                ),
                 onTap: (_, point) {
                   // An open popup (preview or add form) gets dismissed first.
                   if (_selected != null || _addingPoint != null) {
@@ -279,6 +338,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   } else if (_zoom < _addZoom) {
                     // Not zoomed in enough to place a record precisely — zoom
                     // (animated) toward the tapped point instead of adding.
+                    _wheelTargetZoom = null;
                     _animatedMove(
                         point, (_zoom + 3).clamp(0, _addZoom).toDouble());
                   } else {
@@ -447,6 +507,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
             ),
           ],
+          ),
           ),
         );
       },
