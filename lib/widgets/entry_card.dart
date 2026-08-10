@@ -5,72 +5,170 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../models/entry.dart';
+import '../models/trip.dart';
 import '../state/app_state.dart';
 import 'entry_image.dart';
 
-/// A compact list row for one [Entry], reused by both list views.
+/// One [Entry] rendered in the default [图+文] format: its images (up to four)
+/// above, then the body text, with the title shown only when one was set.
+/// Reused by every list view.
 class EntryCard extends StatelessWidget {
   final Entry entry;
   const EntryCard({super.key, required this.entry});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final appState = context.read<AppState>();
     final trip = appState.tripById(entry.tripId);
     final dateStr = DateFormat('yyyy.MM.dd HH:mm').format(entry.timestamp);
+    final title = entry.explicitTitle;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: ListTile(
-        leading: EntryImage(
-          imagePath: entry.imagePath,
-          width: 48,
-          height: 48,
-          borderRadius: BorderRadius.circular(8),
-          fallback: CircleAvatar(
-            child: Text(entry.markerGlyph,
-                style: const TextStyle(fontSize: 18)),
-          ),
-        ),
-        title: Text(entry.displayTitle,
-            maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Column(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 2),
+            if (entry.hasImage) ...[
+              _ImageStrip(paths: entry.imagePaths, glyph: entry.markerGlyph),
+              const SizedBox(height: 10),
+            ],
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(entry.type.icon, size: 14, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(entry.type.label,
-                    style: const TextStyle(fontSize: 12)),
-                const SizedBox(width: 8),
-                if (entry.location != null) ...[
-                  const Icon(Icons.place_outlined,
-                      size: 14, color: Colors.grey),
-                  const SizedBox(width: 2),
-                  Flexible(
-                    child: Text(entry.location!.placeName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12)),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title is optional — only shown when the user set one.
+                      if (title != null) ...[
+                        Text(title,
+                            style: theme.textTheme.titleMedium,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 4),
+                      ],
+                      if (entry.body.isNotEmpty)
+                        Text(entry.body,
+                            maxLines: 4, overflow: TextOverflow.ellipsis),
+                      // With neither title nor body, keep the type as a heading
+                      // so the row never reads as empty.
+                      if (title == null && entry.body.isEmpty)
+                        Text(entry.type.label,
+                            style: theme.textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      _MetaRow(entry: entry, trip: trip, dateStr: dateStr),
+                    ],
                   ),
-                ],
+                ),
+                _DeleteButton(
+                  onConfirm: () => context.read<AppState>().removeEntry(entry.id),
+                ),
               ],
             ),
-            const SizedBox(height: 2),
-            Text('$dateStr · ${trip.title}',
-                style: const TextStyle(fontSize: 11, color: Colors.grey)),
-            if (trip.companions.isNotEmpty)
-              Text('与 ${trip.companions.map((p) => p.name).join('、')}',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
           ],
         ),
-        isThreeLine: true,
-        trailing: _DeleteButton(
-          onConfirm: () => context.read<AppState>().removeEntry(entry.id),
-        ),
       ),
+    );
+  }
+}
+
+/// The images above a card: a single wide banner for one image, or a row of
+/// equal thumbnails for several.
+class _ImageStrip extends StatelessWidget {
+  final List<String> paths;
+  final String glyph;
+
+  const _ImageStrip({required this.paths, required this.glyph});
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(10);
+
+    if (paths.length == 1) {
+      return EntryImage(
+        imagePath: paths.first,
+        height: 168,
+        borderRadius: radius,
+        fallback: _fallback(context, 168),
+      );
+    }
+
+    return SizedBox(
+      height: 92,
+      child: Row(
+        children: [
+          for (var i = 0; i < paths.length; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            Expanded(
+              child: EntryImage(
+                imagePath: paths[i],
+                height: 92,
+                borderRadius: radius,
+                fallback: _fallback(context, 92),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _fallback(BuildContext context, double height) {
+    final theme = Theme.of(context);
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      alignment: Alignment.center,
+      child: Text(glyph, style: const TextStyle(fontSize: 26)),
+    );
+  }
+}
+
+/// The compact meta line(s) under a card: type, place, date · trip, companions.
+class _MetaRow extends StatelessWidget {
+  final Entry entry;
+  final Trip trip;
+  final String dateStr;
+
+  const _MetaRow(
+      {required this.entry, required this.trip, required this.dateStr});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(entry.type.icon, size: 14, color: Colors.grey),
+            const SizedBox(width: 4),
+            Text(entry.type.label, style: const TextStyle(fontSize: 12)),
+            if (entry.location != null) ...[
+              const SizedBox(width: 8),
+              const Icon(Icons.place_outlined, size: 14, color: Colors.grey),
+              const SizedBox(width: 2),
+              Flexible(
+                child: Text(entry.location!.placeName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12)),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text('$dateStr · ${trip.title}',
+            style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        if (trip.companions.isNotEmpty)
+          Text('与 ${trip.companions.map((p) => p.name).join('、')}',
+              style: const TextStyle(fontSize: 11, color: Colors.grey)),
+      ],
     );
   }
 }

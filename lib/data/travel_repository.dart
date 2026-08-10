@@ -44,11 +44,15 @@ abstract class TravelRepository {
   Future<void> deleteEntry(String entryId);
 
   /// Uploads a jpg for a photo/drawing entry and returns its storage path.
+  ///
+  /// [index] disambiguates the several images a single record can carry, so
+  /// their storage paths never collide.
   Future<String> uploadImage({
     required String tripId,
     required String entryId,
     required Uint8List bytes,
     String contentType = 'image/jpeg',
+    int index = 0,
   });
 
   /// A displayable URL for a stored image path, or null if it can't be shown
