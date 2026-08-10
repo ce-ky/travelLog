@@ -195,21 +195,27 @@ class _TripCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(trip.title, style: theme.textTheme.titleMedium),
+                    Text(trip.title,
+                        style: theme.textTheme.titleMedium,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 6),
-                    Row(
+                    // Wrap (not Row) so the date + count metrics fall to a second
+                    // line instead of overflowing in the narrow two-pane list.
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
                       children: [
-                        Icon(Icons.event, size: 14, color: theme.hintColor),
-                        const SizedBox(width: 4),
-                        Text(dates,
-                            style: TextStyle(
-                                fontSize: 12, color: theme.hintColor)),
-                        const SizedBox(width: 12),
-                        Icon(Icons.notes, size: 14, color: theme.hintColor),
-                        const SizedBox(width: 4),
-                        Text('$count 条记录',
-                            style: TextStyle(
-                                fontSize: 12, color: theme.hintColor)),
+                        _MetaChip(
+                          icon: Icons.event,
+                          text: dates,
+                          color: theme.hintColor,
+                        ),
+                        _MetaChip(
+                          icon: Icons.notes,
+                          text: '$count 条记录',
+                          color: theme.hintColor,
+                        ),
                       ],
                     ),
                     if (trip.companions.isNotEmpty) ...[
@@ -351,6 +357,28 @@ class _TripMenu extends StatelessWidget {
       ),
     );
     if (ok == true) await appState.removeTrip(trip.id);
+  }
+}
+
+/// A single icon + label metric, kept intact as a unit inside a [Wrap] so it
+/// never splits across a line break.
+class _MetaChip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  const _MetaChip({required this.icon, required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Text(text, style: TextStyle(fontSize: 12, color: color)),
+      ],
+    );
   }
 }
 
