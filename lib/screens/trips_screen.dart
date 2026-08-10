@@ -4,13 +4,26 @@ import 'package:provider/provider.dart';
 
 import '../models/trip.dart';
 import '../state/app_state.dart';
+import '../widgets/trip_records_panel.dart';
 import 'new_trip_sheet.dart';
 import 'trip_detail_screen.dart';
 
-/// View 2: trips as cards. Each card can be renamed, edited or deleted, and
-/// tapping it opens that trip's records.
-class TripsScreen extends StatelessWidget {
+/// View 2: trips as cards. On a wide window it's a two-pane master–detail —
+/// clicking a trip on the left shows only that trip's records on the right, in
+/// place. On a phone, tapping a trip opens its records full-screen instead.
+class TripsScreen extends StatefulWidget {
   const TripsScreen({super.key});
+
+  @override
+  State<TripsScreen> createState() => _TripsScreenState();
+}
+
+class _TripsScreenState extends State<TripsScreen> {
+  /// The trip whose records fill the right pane (wide layout only).
+  String? _selectedTripId;
+
+  /// Below this width there's no room for a side pane; tapping navigates.
+  static const double _twoPaneBreakpoint = 720;
 
   @override
   Widget build(BuildContext context) {
@@ -28,13 +41,77 @@ class TripsScreen extends StatelessWidget {
 
     final trips = [...appState.trips]
       ..sort((a, b) => b.startDate.compareTo(a.startDate));
+    final wide = MediaQuery.sizeOf(context).width >= _twoPaneBreakpoint;
 
+    // A selection that points at a since-deleted trip should fall back to none.
+    if (_selectedTripId != null &&
+        !trips.any((t) => t.id == _selectedTripId)) {
+      _selectedTripId = null;
+    }
+
+    final list = _tripList(trips, wide);
+    if (!wide) return list;
+
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(width: 360, child: list),
+        VerticalDivider(width: 1, color: theme.dividerColor),
+        Expanded(
+          child: _selectedTripId == null
+              ? _pickPrompt(theme)
+              : TripRecordsPanel(tripId: _selectedTripId!),
+        ),
+      ],
+    );
+  }
+
+  Widget _tripList(List<Trip> trips, bool wide) {
     // Row 0 is the "new trip" affordance; the rest are the trip cards.
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: trips.length + 1,
-      itemBuilder: (_, i) =>
-          i == 0 ? const _NewTripRow() : _TripCard(trip: trips[i - 1]),
+      itemBuilder: (context, i) {
+        if (i == 0) return const _NewTripRow();
+        final trip = trips[i - 1];
+        return _TripCard(
+          trip: trip,
+          selected: wide && trip.id == _selectedTripId,
+          onTap: () => _openTrip(trip, wide),
+        );
+      },
+    );
+  }
+
+  void _openTrip(Trip trip, bool wide) {
+    if (wide) {
+      setState(() => _selectedTripId = trip.id);
+      return;
+    }
+    // Phone: no side pane, so open the trip's records full-screen.
+    final appState = context.read<AppState>();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChangeNotifierProvider.value(
+          value: appState,
+          child: TripDetailScreen(tripId: trip.id),
+        ),
+      ),
+    );
+  }
+
+  Widget _pickPrompt(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.touch_app_outlined, size: 44, color: theme.hintColor),
+          const SizedBox(height: 12),
+          Text('点击左侧的旅途，查看它的全部记录',
+              style: TextStyle(color: theme.hintColor)),
+        ],
+      ),
     );
   }
 }
@@ -82,7 +159,14 @@ class _NewTripRow extends StatelessWidget {
 
 class _TripCard extends StatelessWidget {
   final Trip trip;
-  const _TripCard({required this.trip});
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TripCard({
+    required this.trip,
+    required this.onTap,
+    this.selected = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -97,16 +181,11 @@ class _TripCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      // Highlight the trip whose records fill the right pane.
+      color: selected ? theme.colorScheme.secondaryContainer : null,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ChangeNotifierProvider.value(
-              value: appState,
-              child: TripDetailScreen(tripId: trip.id),
-            ),
-          ),
-        ),
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
           child: Row(

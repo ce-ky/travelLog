@@ -114,6 +114,9 @@ class SupabaseTravelRepository implements TravelRepository {
       'place_name': entry.location?.placeName,
       'lat': entry.location?.lat,
       'lng': entry.location?.lng,
+      'image_paths': entry.imagePaths,
+      // Keep the legacy single column in sync so an older client/reader still
+      // sees the cover image.
       'image_path': entry.imagePath,
       'marker_glyph': entry.markerGlyph,
       'tags': entry.tags,
@@ -167,10 +170,13 @@ class SupabaseTravelRepository implements TravelRepository {
     required String entryId,
     required Uint8List bytes,
     String contentType = 'image/jpeg',
+    int index = 0,
   }) async {
     // `{trip_id}/...` first segment is load-bearing: the storage policies read
     // it to decide access, reusing the same trip-membership rule as the tables.
-    final path = '$tripId/$entryId/${DateTime.now().millisecondsSinceEpoch}.jpg';
+    // `index` keeps a record's several images from clobbering each other.
+    final path =
+        '$tripId/$entryId/${index}_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
     await _db.storage.from(_bucket).uploadBinary(
           path,
@@ -215,6 +221,18 @@ class SupabaseTravelRepository implements TravelRepository {
         companions: companionsByTrip[r['id'] as String] ?? const [],
       );
 
+  /// Reads a record's images, preferring the new `image_paths` array and
+  /// falling back to the legacy single `image_path` for rows written before the
+  /// multi-image migration.
+  static List<String> _imagePathsFrom(Map<String, dynamic> r) {
+    final arr = r['image_paths'] as List?;
+    if (arr != null && arr.isNotEmpty) {
+      return arr.map((e) => e as String).toList();
+    }
+    final single = r['image_path'] as String?;
+    return single == null ? const [] : [single];
+  }
+
   Entry _entryFrom(Map<String, dynamic> r) {
     final lat = (r['lat'] as num?)?.toDouble();
     final lng = (r['lng'] as num?)?.toDouble();
@@ -234,7 +252,7 @@ class SupabaseTravelRepository implements TravelRepository {
               placeName: r['place_name'] as String? ?? '',
             ),
       tags: List<String>.from(r['tags'] as List? ?? const []),
-      imagePath: r['image_path'] as String?,
+      imagePaths: _imagePathsFrom(r),
       markerGlyph: r['marker_glyph'] as String? ?? '📍',
     );
   }

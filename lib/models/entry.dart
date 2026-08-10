@@ -19,8 +19,9 @@ class Entry {
   final GeoPoint? location;
   final List<String> tags;
 
-  /// Local path / remote URL of the uploaded jpg for photo & drawing entries.
-  final String? imagePath;
+  /// Storage paths / URLs of the uploaded jpgs for photo & drawing entries —
+  /// up to four per record. Ordered as the user arranged them.
+  final List<String> imagePaths;
 
   /// Emoji or asset key used to render this entry's custom-shaped map marker.
   final String markerGlyph;
@@ -34,9 +35,20 @@ class Entry {
     required this.timestamp,
     this.location,
     this.tags = const [],
-    this.imagePath,
+    this.imagePaths = const [],
     this.markerGlyph = '📍',
   });
+
+  /// The first image, for spots that show a single thumbnail (map markers, the
+  /// list-row leading avatar).
+  String? get imagePath => imagePaths.isEmpty ? null : imagePaths.first;
+
+  /// Whether the record carries at least one image.
+  bool get hasImage => imagePaths.isNotEmpty;
+
+  /// The user-entered title, or null when none was set. The [图+文] card shows a
+  /// title row only when this is non-null — a title is optional, never forced.
+  String? get explicitTitle => title.trim().isEmpty ? null : title.trim();
 
   /// What to show as the record's heading. The form no longer collects a title,
   /// so fall back to the place name, then a snippet of the body, then the type.

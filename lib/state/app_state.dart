@@ -174,16 +174,19 @@ class AppState extends ChangeNotifier {
       _imageUrls.putIfAbsent(storagePath, () => _repo.imageUrl(storagePath));
 
   /// Uploads a jpg and returns its storage path, for entries that carry one.
+  /// [index] disambiguates the several images one record can hold.
   Future<String> uploadImage({
     required String tripId,
     required String entryId,
     required Uint8List bytes,
     String contentType = 'image/jpeg',
+    int index = 0,
   }) =>
       _repo.uploadImage(
         tripId: tripId,
         entryId: entryId,
         bytes: bytes,
         contentType: contentType,
+        index: index,
       );
 }
