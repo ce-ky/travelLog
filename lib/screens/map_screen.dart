@@ -29,6 +29,14 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   final MapController _map = MapController();
 
+  /// Selected base-map style (index into [_mapStyles]); switchable at runtime
+  /// from the layers button in the bottom-left corner.
+  int _styleIndex = 0;
+
+  /// Hides the place-name label overlay on styles that ship one as a separate
+  /// layer (the CARTO family); baked-label styles ignore it.
+  bool _labelsHidden = false;
+
   /// Mouse hover position over the map (desktop/web), for the "click to add"
   /// hint shown once zoomed in enough. A notifier so moving the mouse rebuilds
   /// only the hint, not the whole map.
@@ -209,8 +217,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       ));
     });
 
+    final style = _mapStyles[_styleIndex];
     final map = LayoutBuilder(
+
       builder: (context, constraints) {
+        // Web Mercator draws the whole world 256 * 2^zoom px tall, so keeping it
+        // covering the viewport height — no grey band above or below — means the
+        // zoom can't drop below log2(viewportHeight / 256). Recomputed on resize.
+        final h = constraints.maxHeight.isFinite && constraints.maxHeight > 0
+            ? constraints.maxHeight
+            : 600.0;
+        final minZoom = math.max(0.0, math.log(h / 256) / math.ln2);
         return MouseRegion(
           onHover: (e) {
             _hover.value = (_zoom >= _addZoom &&
@@ -227,6 +244,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               options: MapOptions(
                 initialCenter: center,
                 initialZoom: 5,
+                // Can't zoom out past the point where the map fills the window
+                // vertically (top & bottom edges flush with the page).
+                minZoom: minZoom,
                 onTap: (_, point) {
                   // An open popup (preview or add form) gets dismissed first.
                   if (_selected != null || _addingPoint != null) {
@@ -258,10 +278,23 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: style.urlTemplate,
+                  subdomains: style.subdomains,
+                  maxNativeZoom: style.maxNativeZoom,
                   userAgentPackageName: 'com.example.travel_log',
                   tileProvider: widget.tileProvider,
                 ),
+                // Transparent place-name overlay for styles that ship one, sat
+                // above the base map but below the trip lines and markers. The
+                // "hide labels" toggle simply drops this layer.
+                if (style.labelsUrlTemplate != null && !_labelsHidden)
+                  TileLayer(
+                    urlTemplate: style.labelsUrlTemplate!,
+                    subdomains: style.subdomains,
+                    maxNativeZoom: style.maxNativeZoom,
+                    userAgentPackageName: 'com.example.travel_log',
+                    tileProvider: widget.tileProvider,
+                  ),
                 // Per-record lines only make sense when records are shown.
                 if (!_collapsed && polylines.isNotEmpty)
                   PolylineLayer(polylines: polylines),
@@ -352,6 +385,47 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   ),
                 );
               },
+            ),
+            // Base-map style switcher (bottom-left) + live attribution.
+            Positioned(
+              left: 16,
+              bottom: 16,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _StyleSwitcher(
+                    styles: _mapStyles,
+                    selected: _styleIndex,
+                    onSelect: (i) => setState(() => _styleIndex = i),
+                  ),
+                  const SizedBox(width: 10),
+                  _LabelToggle(
+                    hidden: _labelsHidden,
+                    enabled: style.labelsUrlTemplate != null,
+                    onTap: () =>
+                        setState(() => _labelsHidden = !_labelsHidden),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              right: 8,
+              bottom: 6,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Text(style.attribution,
+                        style: const TextStyle(
+                            fontSize: 9, color: Colors.black54)),
+                  ),
+                ),
+              ),
             ),
           ],
           ),
@@ -895,4 +969,232 @@ class _BubblePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BubblePainter old) => old.tailHeight != tailHeight;
+}
+
+/// A selectable base-map tile style. All entries here are free and keyless; the
+/// `attribution` string is the credit each provider's terms require on screen.
+class _MapStyle {
+  final String label;
+  final String urlTemplate;
+
+  /// A transparent labels-only overlay for this style, or null if the style
+  /// bakes labels into its tiles (or has none). Its presence is what lets the
+  /// place names be hidden independently of the base map.
+  final String? labelsUrlTemplate;
+  final List<String> subdomains;
+
+  /// Highest zoom the provider actually ships tiles for; beyond it flutter_map
+  /// upscales the last real tiles instead of requesting missing ones.
+  final int maxNativeZoom;
+  final String attribution;
+
+  const _MapStyle({
+    required this.label,
+    required this.urlTemplate,
+    this.labelsUrlTemplate,
+    this.subdomains = const [],
+    this.maxNativeZoom = 19,
+    required this.attribution,
+  });
+}
+
+/// The switchable base maps. URLs verified against each provider's current
+/// keyless raster endpoint; order is the order shown in the picker.
+const _mapStyles = <_MapStyle>[
+  _MapStyle(
+    label: '标准',
+    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    maxNativeZoom: 19,
+    attribution: '© OpenStreetMap contributors',
+  ),
+  _MapStyle(
+    label: '浅色',
+    urlTemplate:
+        'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png',
+    labelsUrlTemplate:
+        'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c', 'd'],
+    maxNativeZoom: 20,
+    attribution: '© OpenStreetMap contributors © CARTO',
+  ),
+  _MapStyle(
+    label: '深色',
+    urlTemplate:
+        'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
+    labelsUrlTemplate:
+        'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c', 'd'],
+    maxNativeZoom: 20,
+    attribution: '© OpenStreetMap contributors © CARTO',
+  ),
+  _MapStyle(
+    label: '彩色',
+    urlTemplate:
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+    labelsUrlTemplate:
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c', 'd'],
+    maxNativeZoom: 20,
+    attribution: '© OpenStreetMap contributors © CARTO',
+  ),
+  _MapStyle(
+    label: '卫星',
+    urlTemplate:
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    maxNativeZoom: 19,
+    attribution: 'Tiles © Esri, Maxar, Earthstar Geographics',
+  ),
+  _MapStyle(
+    label: '地形',
+    urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c'],
+    maxNativeZoom: 17,
+    attribution: '© OpenStreetMap · SRTM | © OpenTopoMap (CC-BY-SA)',
+  ),
+  _MapStyle(
+    label: '骑行',
+    urlTemplate:
+        'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c'],
+    maxNativeZoom: 20,
+    attribution: '© OpenStreetMap contributors · CyclOSM',
+  ),
+];
+
+/// The layers button (bottom-left of the map) that expands a list of base-map
+/// styles and switches between them.
+class _StyleSwitcher extends StatefulWidget {
+  final List<_MapStyle> styles;
+  final int selected;
+  final ValueChanged<int> onSelect;
+
+  const _StyleSwitcher({
+    required this.styles,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  @override
+  State<_StyleSwitcher> createState() => _StyleSwitcherState();
+}
+
+class _StyleSwitcherState extends State<_StyleSwitcher> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_open)
+          Container(
+            width: 132,
+            margin: const EdgeInsets.only(bottom: 10),
+            child: Material(
+              elevation: 4,
+              borderRadius: BorderRadius.circular(12),
+              clipBehavior: Clip.antiAlias,
+              color: theme.colorScheme.surface,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < widget.styles.length; i++)
+                    InkWell(
+                      onTap: () {
+                        widget.onSelect(i);
+                        setState(() => _open = false);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        child: Row(
+                          children: [
+                            Icon(
+                              i == widget.selected
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                              size: 16,
+                              color: i == widget.selected
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(widget.styles[i].label,
+                                style: theme.textTheme.bodyMedium),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        Material(
+          color: theme.colorScheme.surface,
+          elevation: 3,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => setState(() => _open = !_open),
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Icon(Icons.layers_outlined,
+                  color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The "hide place names" toggle beside the style switcher. Disabled for styles
+/// that bake labels into their tiles (or carry none), which can't be split.
+class _LabelToggle extends StatelessWidget {
+  final bool hidden;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _LabelToggle({
+    required this.hidden,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = !enabled
+        ? theme.disabledColor
+        : (hidden
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurfaceVariant);
+
+    return Tooltip(
+      message: !enabled
+          ? '该底图无法单独隐藏地名'
+          : (hidden ? '显示地名' : '隐藏地名'),
+      child: Material(
+        color: theme.colorScheme.surface,
+        elevation: 3,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: Icon(
+              hidden ? Icons.label_off_outlined : Icons.label_outline,
+              color: color,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
