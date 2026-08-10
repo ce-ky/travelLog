@@ -168,7 +168,8 @@ class _EntryFormState extends State<EntryForm> {
     setState(() => _pickedImages.addAll(added));
     if (picked.length > added.length) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('最多 $_maxImages 张图，多余的已忽略')),
+        // _maxImages is a compile-time constant, so the whole SnackBar is const.
+        const SnackBar(content: Text('最多 $_maxImages 张图，多余的已忽略')),
       );
     }
     await _applyPhotoMetadata(added);
