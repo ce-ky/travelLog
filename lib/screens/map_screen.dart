@@ -126,8 +126,30 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     });
   }
 
-  void _onSaved() {
-    setState(() => _addingPoint = null);
+  /// Centres the map on [entry] and expands its card. Shared by tapping a
+  /// marker and by saving a new located record, so both give the same feedback.
+  void _selectEntry(Entry entry) {
+    setState(() {
+      _addingPoint = null;
+      _selected = entry;
+    });
+    final loc = entry.location;
+    if (loc != null) {
+      _animatedMove(loc.latLng, math.max(_zoom, _recordZoom + 4).toDouble());
+    }
+  }
+
+  void _onSaved(Entry entry) {
+    if (entry.location != null) {
+      // A located record (e.g. a geotagged photo): zoom to it and expand its
+      // card so the just-saved entry is front-and-centre.
+      _selectEntry(entry);
+    } else {
+      setState(() {
+        _addingPoint = null;
+        _selected = null;
+      });
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('记录已保存')),
     );
@@ -334,10 +356,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                               alignment: Alignment.bottomCenter,
                               child: _EntryMarker(
                                 entry: e,
-                                onTap: () => setState(() {
-                                  _addingPoint = null;
-                                  _selected = e;
-                                }),
+                                onTap: () => _selectEntry(e),
                               ),
                             ),
                           ),

@@ -23,8 +23,8 @@ class EntryForm extends StatefulWidget {
   final String? initialTripId;
   final LatLng? initialPoint;
 
-  /// Called after the entry is saved successfully.
-  final VoidCallback onSaved;
+  /// Called after the entry is saved successfully, with the created entry.
+  final ValueChanged<Entry> onSaved;
 
   /// Called when the user dismisses the form without saving.
   final VoidCallback onClose;
@@ -338,7 +338,7 @@ class _EntryFormState extends State<EntryForm> {
         imagePaths.add(path);
       }
 
-      await appState.addEntry(Entry(
+      final entry = Entry(
         id: _entryId,
         tripId: _tripId!,
         type: _type,
@@ -354,9 +354,10 @@ class _EntryFormState extends State<EntryForm> {
                 placeName: _placeName.text.trim(),
               ),
         imagePaths: imagePaths,
-      ));
+      );
+      await appState.addEntry(entry);
 
-      if (mounted) widget.onSaved();
+      if (mounted) widget.onSaved(entry);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {

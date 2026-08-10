@@ -36,7 +36,7 @@ class NewEntrySheet {
               child: EntryForm(
                 initialTripId: initialTripId,
                 initialPoint: initialPoint,
-                onSaved: () => Navigator.of(sheetContext).pop(true),
+                onSaved: (_) => Navigator.of(sheetContext).pop(true),
                 onClose: () => Navigator.of(sheetContext).pop(false),
               ),
             ),
