@@ -12,6 +12,8 @@ import '../models/entry_type.dart';
 import '../models/geo_point.dart';
 import '../models/trip.dart';
 import '../state/app_state.dart';
+import '../utils/image_upload.dart';
+import '../utils/photo_metadata.dart';
 import 'location_picker_screen.dart';
 
 /// The new-entry form itself, independent of how it's presented. It's hosted
@@ -58,7 +60,27 @@ class _EntryFormState extends State<EntryForm> {
   DateTime _when = DateTime.now();
 
   LatLng? _point;
-  XFile? _pickedImage;
+
+  /// Up to [_maxImages] picked images, in display order.
+  final List<XFile> _pickedImages = [];
+
+  /// Max images a single record can carry.
+  static const int _maxImages = 4;
+
+  /// Max characters allowed in the body text.
+  static const int _maxBody = 5000;
+
+  /// True while [_point] came from a picked photo's geotag rather than a
+  /// manual map pick — drives the "位置来自照片" hint.
+  bool _locationFromPhoto = false;
+
+  /// Set once the user edits the time by hand, so photo metadata won't overwrite
+  /// a deliberate choice.
+  bool _whenTouched = false;
+
+  /// Set once a photo's capture time has been applied, so a second photo in the
+  /// same pick doesn't override the first one's time.
+  bool _timeFromPhoto = false;
 
   bool _busy = false;
   String? _error;
@@ -130,13 +152,55 @@ class _EntryFormState extends State<EntryForm> {
 
   bool get _needsImage => _type.isImageBacked;
 
-  Future<void> _pickImage() async {
-    final x = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-      maxWidth: 2400,
+  int get _remainingImageSlots => _maxImages - _pickedImages.length;
+
+  Future<void> _pickImages() async {
+    if (_remainingImageSlots <= 0) return;
+    // Pick at full resolution (no maxWidth/imageQuality) so each photo's EXIF —
+    // its GPS geotag and capture time — survives; image_picker's own resize
+    // re-encodes and strips that metadata. We downscale ourselves at upload.
+    final picked = await ImagePicker().pickMultiImage(
+      requestFullMetadata: true,
     );
-    if (x != null) setState(() => _pickedImage = x);
+    if (picked.isEmpty || !mounted) return;
+    // Honour the four-image cap even if the user selected more.
+    final added = picked.take(_remainingImageSlots).toList();
+    setState(() => _pickedImages.addAll(added));
+    if (picked.length > added.length) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        // _maxImages is a compile-time constant, so the whole SnackBar is const.
+        const SnackBar(content: Text('最多 $_maxImages 张图，多余的已忽略')),
+      );
+    }
+    await _applyPhotoMetadata(added);
+  }
+
+  void _removeImageAt(int index) {
+    setState(() => _pickedImages.removeAt(index));
+  }
+
+  /// Pulls a geotag and capture time out of the newly-added photos' EXIF and
+  /// fills them in — the location so the record lands on the map where the shot
+  /// was taken, the time so the record is dated when it happened. Uses the first
+  /// photo that carries each, and never overrides a value the user set by hand.
+  Future<void> _applyPhotoMetadata(List<XFile> images) async {
+    for (final image in images) {
+      // Stop early once both are settled.
+      if (_point != null && _timeFromPhoto) return;
+      final bytes = await image.readAsBytes();
+      final meta = await readPhotoMetadata(bytes);
+      if (!mounted) return;
+      setState(() {
+        if (meta.location != null && _point == null) {
+          _point = meta.location;
+          _locationFromPhoto = true;
+        }
+        if (meta.capturedAt != null && !_whenTouched && !_timeFromPhoto) {
+          _when = meta.capturedAt!;
+          _timeFromPhoto = true;
+        }
+      });
+    }
   }
 
   Future<void> _pickWhen() async {
@@ -152,6 +216,7 @@ class _EntryFormState extends State<EntryForm> {
       initialTime: TimeOfDay.fromDateTime(_when),
     );
     setState(() {
+      _whenTouched = true;
       _when = DateTime(
         date.year,
         date.month,
@@ -231,7 +296,12 @@ class _EntryFormState extends State<EntryForm> {
 
   Future<void> _pickLocation() async {
     final picked = await LocationPickerScreen.show(context, initialPoint: _point);
-    if (picked != null) setState(() => _point = picked);
+    if (picked != null) {
+      setState(() {
+        _point = picked;
+        _locationFromPhoto = false; // a hand-picked point is no longer "from photo"
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -240,8 +310,8 @@ class _EntryFormState extends State<EntryForm> {
       setState(() => _error = '请选择所属旅途');
       return;
     }
-    if (_needsImage && _pickedImage == null) {
-      setState(() => _error = '这类记录需要选择一张图片');
+    if (_needsImage && _pickedImages.isEmpty) {
+      setState(() => _error = '这类记录需要至少选择一张图片');
       return;
     }
 
@@ -252,23 +322,27 @@ class _EntryFormState extends State<EntryForm> {
 
     final appState = context.read<AppState>();
     try {
-      String? imagePath;
-      if (_pickedImage != null) {
-        final bytes = await _pickedImage!.readAsBytes();
-        imagePath = await appState.uploadImage(
+      // Upload each picked image; keep them in the order the user arranged.
+      final imagePaths = <String>[];
+      for (var i = 0; i < _pickedImages.length; i++) {
+        final image = _pickedImages[i];
+        final original = await image.readAsBytes();
+        final upload = prepareUpload(original, image.name);
+        final path = await appState.uploadImage(
           tripId: _tripId!,
           entryId: _entryId,
-          bytes: bytes,
-          contentType: _contentTypeFor(_pickedImage!.name),
+          bytes: upload.bytes,
+          contentType: upload.contentType,
+          index: i,
         );
+        imagePaths.add(path);
       }
 
       await appState.addEntry(Entry(
         id: _entryId,
         tripId: _tripId!,
         type: _type,
-        // No title field; the card derives a display title from the place
-        // name / body / type instead.
+        // No title field; the card leads with the images and body instead.
         title: '',
         body: _body.text.trim(),
         timestamp: _when,
@@ -279,7 +353,7 @@ class _EntryFormState extends State<EntryForm> {
                 lng: _point!.longitude,
                 placeName: _placeName.text.trim(),
               ),
-        imagePath: imagePath,
+        imagePaths: imagePaths,
       ));
 
       if (mounted) widget.onSaved();
@@ -288,14 +362,6 @@ class _EntryFormState extends State<EntryForm> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  static String _contentTypeFor(String name) {
-    final n = name.toLowerCase();
-    if (n.endsWith('.png')) return 'image/png';
-    if (n.endsWith('.webp')) return 'image/webp';
-    if (n.endsWith('.heic')) return 'image/heic';
-    return 'image/jpeg';
   }
 
   @override
@@ -321,11 +387,12 @@ class _EntryFormState extends State<EntryForm> {
                   _buildTripChips(appState),
                   const SizedBox(height: 14),
                   if (_needsImage) ...[
-                    _ImagePickerField(
-                      image: _pickedImage,
-                      height: 200,
-                      onPick: _pickImage,
-                      onClear: () => setState(() => _pickedImage = null),
+                    _ImageGalleryField(
+                      images: _pickedImages,
+                      maxImages: _maxImages,
+                      tileSize: 96,
+                      onAdd: _pickImages,
+                      onRemoveAt: _removeImageAt,
                     ),
                     const SizedBox(height: 14),
                   ],
@@ -334,6 +401,10 @@ class _EntryFormState extends State<EntryForm> {
                   _timeField(fmt),
                   const SizedBox(height: 14),
                   _locationField(),
+                  if (_locationFromPhoto) ...[
+                    const SizedBox(height: 6),
+                    _photoLocationBadge(theme),
+                  ],
                   if (_point != null) ...[
                     const SizedBox(height: 10),
                     _placeNameField(),
@@ -369,11 +440,12 @@ class _EntryFormState extends State<EntryForm> {
               if (_needsImage) ...[
                 SizedBox(
                   width: 140,
-                  child: _ImagePickerField(
-                    image: _pickedImage,
-                    height: 170,
-                    onPick: _pickImage,
-                    onClear: () => setState(() => _pickedImage = null),
+                  child: _ImageGalleryField(
+                    images: _pickedImages,
+                    maxImages: _maxImages,
+                    tileSize: 62,
+                    onAdd: _pickImages,
+                    onRemoveAt: _removeImageAt,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -402,7 +474,7 @@ class _EntryFormState extends State<EntryForm> {
         const SizedBox(height: 8),
         _buildTripChips(appState),
         const SizedBox(height: 8),
-        _bodyField(maxLines: 2),
+        _bodyField(maxLines: 2, dense: true),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -411,6 +483,10 @@ class _EntryFormState extends State<EntryForm> {
             Expanded(child: _locationField(dense: true)),
           ],
         ),
+        if (_locationFromPhoto) ...[
+          const SizedBox(height: 6),
+          _photoLocationBadge(theme),
+        ],
         if (_point != null) ...[
           const SizedBox(height: 8),
           _placeNameField(dense: true),
@@ -445,11 +521,17 @@ class _EntryFormState extends State<EntryForm> {
     );
   }
 
-  Widget _bodyField({required int maxLines}) {
+  Widget _bodyField({required int maxLines, bool dense = false}) {
     return TextFormField(
       controller: _body,
       minLines: 2,
       maxLines: maxLines,
+      // Cap the body at 5000 chars (enforced by default when maxLength is set).
+      maxLength: _maxBody,
+      // Hide the character counter in the cramped compact/map-popup layout.
+      buildCounter: dense
+          ? (_, {required currentLength, required isFocused, maxLength}) => null
+          : null,
       textCapitalization: TextCapitalization.sentences,
       decoration: const InputDecoration(
         labelText: '说些什么：',
@@ -479,8 +561,29 @@ class _EntryFormState extends State<EntryForm> {
           : '${_point!.latitude.toStringAsFixed(dense ? 2 : 4)}, '
               '${_point!.longitude.toStringAsFixed(dense ? 2 : 4)}',
       onTap: _pickLocation,
-      onClear: _point == null ? null : () => setState(() => _point = null),
+      onClear: _point == null
+          ? null
+          : () => setState(() {
+                _point = null;
+                _locationFromPhoto = false;
+              }),
       dense: dense,
+    );
+  }
+
+  /// A small note shown under the location field when [_point] was auto-filled
+  /// from the picked photo's geotag.
+  Widget _photoLocationBadge(ThemeData theme) {
+    return Row(
+      children: [
+        Icon(Icons.auto_awesome, size: 14, color: theme.colorScheme.primary),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text('位置来自照片',
+              style:
+                  TextStyle(fontSize: 12, color: theme.colorScheme.primary)),
+        ),
+      ],
     );
   }
 
@@ -608,83 +711,107 @@ class _TapField extends StatelessWidget {
   }
 }
 
-class _ImagePickerField extends StatelessWidget {
-  final XFile? image;
-  final double height;
-  final VoidCallback onPick;
-  final VoidCallback onClear;
+/// A small gallery for picking up to [maxImages] photos: each picked image is a
+/// removable thumbnail, and an "add" tile appears while slots remain. Tiles wrap
+/// so the field fits both the full sheet and the narrow map-popup strip.
+class _ImageGalleryField extends StatelessWidget {
+  final List<XFile> images;
+  final int maxImages;
+  final double tileSize;
+  final VoidCallback onAdd;
+  final void Function(int index) onRemoveAt;
 
-  const _ImagePickerField({
-    required this.image,
-    required this.height,
-    required this.onPick,
-    required this.onClear,
+  const _ImageGalleryField({
+    required this.images,
+    required this.maxImages,
+    required this.tileSize,
+    required this.onAdd,
+    required this.onRemoveAt,
   });
 
   @override
   Widget build(BuildContext context) {
+    final canAdd = images.length < maxImages;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (var i = 0; i < images.length; i++)
+          _thumb(context, images[i], i),
+        if (canAdd) _addTile(context),
+      ],
+    );
+  }
+
+  Widget _thumb(BuildContext context, XFile image, int index) {
     final theme = Theme.of(context);
-
-    if (image == null) {
-      return InkWell(
-        onTap: onPick,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          height: height,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest
-                .withValues(alpha: 0.4),
-            border: Border.all(color: theme.colorScheme.outlineVariant),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.add_photo_alternate_outlined,
-                  size: 40, color: theme.colorScheme.primary),
-              const SizedBox(height: 8),
-              const Text('选择图片'),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Image.memory works the same on web, desktop and mobile.
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Stack(
-        children: [
-          FutureBuilder<Uint8List>(
-            future: image!.readAsBytes(),
-            builder: (context, snap) {
-              if (!snap.hasData) {
-                return Container(
-                  height: height,
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  child: const Center(child: CircularProgressIndicator()),
-                );
-              }
-              return Image.memory(
-                snap.data!,
-                height: height,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              );
-            },
-          ),
-          Positioned(
-            top: 6,
-            right: 6,
-            child: Row(
-              children: [
-                _ImageAction(icon: Icons.edit, onTap: onPick),
-                const SizedBox(width: 6),
-                _ImageAction(icon: Icons.close, onTap: onClear),
-              ],
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: tileSize,
+        height: tileSize,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Image.memory works the same on web, desktop and mobile.
+            FutureBuilder<Uint8List>(
+              future: image.readAsBytes(),
+              builder: (context, snap) {
+                if (!snap.hasData) {
+                  return Container(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    child: const Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  );
+                }
+                return Image.memory(snap.data!, fit: BoxFit.cover);
+              },
             ),
-          ),
-        ],
+            Positioned(
+              top: 2,
+              right: 2,
+              child: _ImageAction(
+                icon: Icons.close,
+                onTap: () => onRemoveAt(index),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _addTile(BuildContext context) {
+    final theme = Theme.of(context);
+    final dense = tileSize < 80;
+    return InkWell(
+      onTap: onAdd,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: tileSize,
+        height: tileSize,
+        decoration: BoxDecoration(
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add_photo_alternate_outlined,
+                size: dense ? 22 : 32, color: theme.colorScheme.primary),
+            if (!dense) ...[
+              const SizedBox(height: 4),
+              Text('添加', style: TextStyle(color: theme.colorScheme.primary)),
+            ],
+          ],
+        ),
       ),
     );
   }

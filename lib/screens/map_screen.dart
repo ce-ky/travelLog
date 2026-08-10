@@ -9,8 +9,10 @@ import 'package:provider/provider.dart';
 import '../models/entry.dart';
 import '../state/app_state.dart';
 import '../widgets/entry_image.dart';
+import '../widgets/trip_records_panel.dart';
 import 'entry_form.dart';
 import 'new_trip_sheet.dart';
+import 'trip_detail_screen.dart';
 
 /// View 1: a single map with custom-glyph markers pinned at each located entry.
 class MapScreen extends StatefulWidget {
@@ -91,6 +93,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// with [_selected].
   LatLng? _addingPoint;
 
+  /// The trip whose records fill the right-hand panel (wide layout only), set by
+  /// tapping its cluster bubble.
+  String? _panelTripId;
+
+  /// Below this width there's no room for a side panel; a trip tap navigates.
+  static const double _panelBreakpoint = 720;
+
   /// Current map zoom, tracked so markers can collapse into per-trip clusters
   /// when zoomed out. Below [_recordZoom] shows trips; at/above it, records.
   double _zoom = 5;
@@ -147,10 +156,41 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
+  /// Tapping a trip cluster: on a wide window it opens the trip's records in a
+  /// right-hand panel (and fits the trip on the map); on a phone, where there's
+  /// no room for a panel, it opens the trip's records full-screen.
+  void _openTripPanel(String tripId, List<LatLng> points) {
+    final wide = MediaQuery.sizeOf(context).width >= _panelBreakpoint;
+    if (wide) {
+      setState(() {
+        _selected = null;
+        _addingPoint = null;
+        _panelTripId = tripId;
+      });
+      _fitTrip(points);
+    } else {
+      final appState = context.read<AppState>();
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChangeNotifierProvider.value(
+            value: appState,
+            child: TripDetailScreen(tripId: tripId),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final entries = appState.locatedEntries;
+
+    // A panel pointing at a since-deleted trip falls back to closed.
+    if (_panelTripId != null &&
+        !appState.trips.any((t) => t.id == _panelTripId)) {
+      _panelTripId = null;
+    }
 
     // If the selected entry was deleted/filtered out, drop the popup.
     if (_selected != null && !entries.any((e) => e.id == _selected!.id)) {
@@ -178,8 +218,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     });
 
     final style = _mapStyles[_styleIndex];
+    final map = LayoutBuilder(
 
-    return LayoutBuilder(
       builder: (context, constraints) {
         // Web Mercator draws the whole world 256 * 2^zoom px tall, so keeping it
         // covering the viewport height — no grey band above or below — means the
@@ -268,12 +308,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           width: 168,
                           height: 50,
                           alignment: Alignment.topCenter,
-                          child: _TripCluster(
-                            title: appState.tripById(group.key).title,
-                            count: group.value.length,
-                            color: _tripColor(group.key),
-                            onTap: () => _fitTrip(
-                              [for (final e in group.value) e.location!.latLng],
+                          child: _HoverBounce(
+                            alignment: Alignment.bottomCenter,
+                            child: _TripCluster(
+                              title: appState.tripById(group.key).title,
+                              count: group.value.length,
+                              color: _tripColor(group.key),
+                              onTap: () => _openTripPanel(group.key,
+                                  [for (final e in group.value) e.location!.latLng]),
                             ),
                           ),
                         )
@@ -288,12 +330,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             height: 40,
                             // Bottom-centre (the teardrop tip) sits on the point.
                             alignment: Alignment.topCenter,
-                            child: _EntryMarker(
-                              entry: e,
-                              onTap: () => setState(() {
-                                _addingPoint = null;
-                                _selected = e;
-                              }),
+                            child: _HoverBounce(
+                              alignment: Alignment.bottomCenter,
+                              child: _EntryMarker(
+                                entry: e,
+                                onTap: () => setState(() {
+                                  _addingPoint = null;
+                                  _selected = e;
+                                }),
+                              ),
                             ),
                           ),
                     // A pulsing pin marks exactly where the tap landed while the
@@ -387,6 +432,29 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         );
       },
     );
+
+    // Wide window with a trip selected: the map shares the row with a right-hand
+    // records panel. Otherwise the map fills the view on its own.
+    final wide = MediaQuery.sizeOf(context).width >= _panelBreakpoint;
+    if (!wide || _panelTripId == null) return map;
+
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(child: map),
+        VerticalDivider(width: 1, color: theme.dividerColor),
+        SizedBox(
+          width: 360,
+          child: Material(
+            child: TripRecordsPanel(
+              tripId: _panelTripId!,
+              onClose: () => setState(() => _panelTripId = null),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   /// Hosts the new-entry [EntryForm] as a card anchored at the tapped point,
@@ -452,6 +520,71 @@ class _AddHint extends StatelessWidget {
         ),
         Icon(Icons.place, color: primary, size: 26),
       ],
+    );
+  }
+}
+
+/// Wraps a map bubble so that moving the mouse onto it plays a lively "pop":
+/// the bubble swells and springs back to its resting size. [alignment] is the
+/// fixed anchor the scale grows from — bottom-centre for teardrop/tailed
+/// bubbles, so their tip stays pinned to the map point during the animation.
+class _HoverBounce extends StatefulWidget {
+  final Widget child;
+  final Alignment alignment;
+
+  const _HoverBounce({
+    required this.child,
+    this.alignment = Alignment.center,
+  });
+
+  @override
+  State<_HoverBounce> createState() => _HoverBounceState();
+}
+
+class _HoverBounceState extends State<_HoverBounce>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 480),
+  );
+
+  // Grow quickly, then spring back past the resting size and settle — the
+  // elastic tail is what gives it the playful bounce.
+  late final Animation<double> _scale = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: Tween(begin: 1.0, end: 1.22).chain(
+        CurveTween(curve: Curves.easeOut),
+      ),
+      weight: 35,
+    ),
+    TweenSequenceItem(
+      tween: Tween(begin: 1.22, end: 1.0).chain(
+        CurveTween(curve: Curves.elasticOut),
+      ),
+      weight: 65,
+    ),
+  ]).animate(_c);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  void _pop() {
+    // Replay from the start so a re-entry always bounces afresh.
+    _c.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => _pop(),
+      child: ScaleTransition(
+        scale: _scale,
+        alignment: widget.alignment,
+        child: widget.child,
+      ),
     );
   }
 }
@@ -616,7 +749,7 @@ class _EntryMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = entry.imagePath != null;
+    final hasImage = entry.hasImage;
     final primary = Theme.of(context).colorScheme.primary;
 
     final fill = hasImage ? primary : Colors.white;
@@ -712,11 +845,40 @@ class _ExpandedBubble extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (entry.imagePath != null)
-                    EntryImage(
-                      imagePath: entry.imagePath,
-                      height: 120,
-                      fallback: const SizedBox.shrink(),
+                  if (entry.hasImage)
+                    Stack(
+                      children: [
+                        EntryImage(
+                          imagePath: entry.imagePath,
+                          height: 120,
+                          fallback: const SizedBox.shrink(),
+                        ),
+                        // A small count badge when the record has several images.
+                        if (entry.imagePaths.length > 1)
+                          Positioned(
+                            right: 6,
+                            bottom: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.photo_library_outlined,
+                                      size: 12, color: Colors.white),
+                                  const SizedBox(width: 3),
+                                  Text('${entry.imagePaths.length}',
+                                      style: const TextStyle(
+                                          fontSize: 11, color: Colors.white)),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 8, 4, 12),
