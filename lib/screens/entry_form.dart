@@ -12,6 +12,8 @@ import '../models/entry_type.dart';
 import '../models/geo_point.dart';
 import '../models/trip.dart';
 import '../state/app_state.dart';
+import '../utils/image_upload.dart';
+import '../utils/photo_metadata.dart';
 import 'location_picker_screen.dart';
 
 /// The new-entry form itself, independent of how it's presented. It's hosted
@@ -59,6 +61,14 @@ class _EntryFormState extends State<EntryForm> {
 
   LatLng? _point;
   XFile? _pickedImage;
+
+  /// True while [_point] came from the picked photo's geotag rather than a
+  /// manual map pick — drives the "位置来自照片" hint.
+  bool _locationFromPhoto = false;
+
+  /// Set once the user edits the time by hand, so photo metadata won't overwrite
+  /// a deliberate choice.
+  bool _whenTouched = false;
 
   bool _busy = false;
   String? _error;
@@ -131,12 +141,35 @@ class _EntryFormState extends State<EntryForm> {
   bool get _needsImage => _type.isImageBacked;
 
   Future<void> _pickImage() async {
+    // Pick at full resolution (no maxWidth/imageQuality) so the photo's EXIF —
+    // its GPS geotag and capture time — survives; image_picker's own resize
+    // re-encodes and strips that metadata. We downscale ourselves at upload.
     final x = await ImagePicker().pickImage(
       source: ImageSource.gallery,
-      imageQuality: 85,
-      maxWidth: 2400,
+      requestFullMetadata: true,
     );
-    if (x != null) setState(() => _pickedImage = x);
+    if (x == null) return;
+    setState(() => _pickedImage = x);
+    await _applyPhotoMetadata(x);
+  }
+
+  /// Pulls the photo's geotag and capture time out of its EXIF and fills them
+  /// in — the location so the record lands on the map where the shot was taken,
+  /// the time so the record is dated when it happened. Neither overrides a value
+  /// the user already set by hand.
+  Future<void> _applyPhotoMetadata(XFile image) async {
+    final bytes = await image.readAsBytes();
+    final meta = await readPhotoMetadata(bytes);
+    if (!mounted || meta.isEmpty) return;
+    setState(() {
+      if (meta.location != null && _point == null) {
+        _point = meta.location;
+        _locationFromPhoto = true;
+      }
+      if (meta.capturedAt != null && !_whenTouched) {
+        _when = meta.capturedAt!;
+      }
+    });
   }
 
   Future<void> _pickWhen() async {
@@ -152,6 +185,7 @@ class _EntryFormState extends State<EntryForm> {
       initialTime: TimeOfDay.fromDateTime(_when),
     );
     setState(() {
+      _whenTouched = true;
       _when = DateTime(
         date.year,
         date.month,
@@ -231,7 +265,12 @@ class _EntryFormState extends State<EntryForm> {
 
   Future<void> _pickLocation() async {
     final picked = await LocationPickerScreen.show(context, initialPoint: _point);
-    if (picked != null) setState(() => _point = picked);
+    if (picked != null) {
+      setState(() {
+        _point = picked;
+        _locationFromPhoto = false; // a hand-picked point is no longer "from photo"
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -254,12 +293,13 @@ class _EntryFormState extends State<EntryForm> {
     try {
       String? imagePath;
       if (_pickedImage != null) {
-        final bytes = await _pickedImage!.readAsBytes();
+        final original = await _pickedImage!.readAsBytes();
+        final upload = prepareUpload(original, _pickedImage!.name);
         imagePath = await appState.uploadImage(
           tripId: _tripId!,
           entryId: _entryId,
-          bytes: bytes,
-          contentType: _contentTypeFor(_pickedImage!.name),
+          bytes: upload.bytes,
+          contentType: upload.contentType,
         );
       }
 
@@ -288,14 +328,6 @@ class _EntryFormState extends State<EntryForm> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  static String _contentTypeFor(String name) {
-    final n = name.toLowerCase();
-    if (n.endsWith('.png')) return 'image/png';
-    if (n.endsWith('.webp')) return 'image/webp';
-    if (n.endsWith('.heic')) return 'image/heic';
-    return 'image/jpeg';
   }
 
   @override
@@ -334,6 +366,10 @@ class _EntryFormState extends State<EntryForm> {
                   _timeField(fmt),
                   const SizedBox(height: 14),
                   _locationField(),
+                  if (_locationFromPhoto) ...[
+                    const SizedBox(height: 6),
+                    _photoLocationBadge(theme),
+                  ],
                   if (_point != null) ...[
                     const SizedBox(height: 10),
                     _placeNameField(),
@@ -411,6 +447,10 @@ class _EntryFormState extends State<EntryForm> {
             Expanded(child: _locationField(dense: true)),
           ],
         ),
+        if (_locationFromPhoto) ...[
+          const SizedBox(height: 6),
+          _photoLocationBadge(theme),
+        ],
         if (_point != null) ...[
           const SizedBox(height: 8),
           _placeNameField(dense: true),
@@ -479,8 +519,29 @@ class _EntryFormState extends State<EntryForm> {
           : '${_point!.latitude.toStringAsFixed(dense ? 2 : 4)}, '
               '${_point!.longitude.toStringAsFixed(dense ? 2 : 4)}',
       onTap: _pickLocation,
-      onClear: _point == null ? null : () => setState(() => _point = null),
+      onClear: _point == null
+          ? null
+          : () => setState(() {
+                _point = null;
+                _locationFromPhoto = false;
+              }),
       dense: dense,
+    );
+  }
+
+  /// A small note shown under the location field when [_point] was auto-filled
+  /// from the picked photo's geotag.
+  Widget _photoLocationBadge(ThemeData theme) {
+    return Row(
+      children: [
+        Icon(Icons.auto_awesome, size: 14, color: theme.colorScheme.primary),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text('位置来自照片',
+              style:
+                  TextStyle(fontSize: 12, color: theme.colorScheme.primary)),
+        ),
+      ],
     );
   }
 
