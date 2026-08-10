@@ -376,7 +376,14 @@ class _MetaChip extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: color),
         const SizedBox(width: 4),
-        Text(text, style: TextStyle(fontSize: 12, color: color)),
+        // Flexible + ellipsis so a long label shrinks to the pane instead of
+        // overflowing when the two-pane list is narrow.
+        Flexible(
+          child: Text(text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, color: color)),
+        ),
       ],
     );
   }
