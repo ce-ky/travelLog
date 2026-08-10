@@ -52,7 +52,7 @@ class MockData {
       location:
           const GeoPoint(lat: 35.0116, lng: 135.7681, placeName: '鸭川'),
       tags: ['河边'],
-      imagePath: 'mock://kamo.jpg',
+      imagePaths: const ['mock://kamo.jpg', 'mock://kamo2.jpg'],
       markerGlyph: '📷',
     ),
     Entry(
@@ -76,7 +76,7 @@ class MockData {
       location:
           const GeoPoint(lat: 25.7860, lng: 100.1910, placeName: '洱海'),
       tags: ['速写', '湖'],
-      imagePath: 'mock://erhai.jpg',
+      imagePaths: const ['mock://erhai.jpg'],
       markerGlyph: '🎨',
     ),
     Entry(

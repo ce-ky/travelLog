@@ -92,8 +92,9 @@ class MockTravelRepository implements TravelRepository {
     required String entryId,
     required Uint8List bytes,
     String contentType = 'image/jpeg',
+    int index = 0,
   }) async =>
-      'mock://$tripId/$entryId.jpg';
+      'mock://$tripId/$entryId/$index.jpg';
 
   // Sample data has no real files behind it.
   @override

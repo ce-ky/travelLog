@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../models/entry.dart';
 import '../models/entry_type.dart';
 import '../models/trip.dart';
 import '../state/app_state.dart';
-import '../widgets/entry_card.dart';
+import '../widgets/entry_grouped_list.dart';
 import 'new_trip_sheet.dart';
 
 /// Everything for one trip: its dates and companions in a header, then all of
@@ -77,7 +76,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           Expanded(
             child: entries.isEmpty
                 ? const Center(child: Text('这趟旅途还没有记录'))
-                : _GroupedList(entries: entries),
+                : EntryGroupedList(entries: entries),
           ),
         ],
       ),
@@ -130,30 +129,3 @@ class _TripHeader extends StatelessWidget {
   }
 }
 
-/// Groups entries by "yyyy年M月" headers.
-class _GroupedList extends StatelessWidget {
-  final List<Entry> entries;
-  const _GroupedList({required this.entries});
-
-  @override
-  Widget build(BuildContext context) {
-    final groups = <String, List<Entry>>{};
-    for (final e in entries) {
-      final key = DateFormat('yyyy年M月').format(e.timestamp);
-      groups.putIfAbsent(key, () => []).add(e);
-    }
-
-    final children = <Widget>[];
-    groups.forEach((month, items) {
-      children.add(Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-        child: Text(month,
-            style: const TextStyle(
-                fontWeight: FontWeight.bold, color: Colors.grey)),
-      ));
-      children.addAll(items.map((e) => EntryCard(entry: e)));
-    });
-
-    return ListView(children: children);
-  }
-}

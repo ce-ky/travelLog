@@ -9,11 +9,12 @@ import 'new_entry_sheet.dart';
 import 'new_trip_sheet.dart';
 import 'trips_screen.dart';
 
-/// Top-level shell hosting the three main views.
+/// Top-level shell. Desktop and phone are two different shells:
 ///
-/// On a wide (desktop) window it drops the tall app bar for a slim title strip
-/// and uses a compact centred nav; on a narrow (phone) window it keeps the
-/// standard Material app bar + navigation bar.
+///  - **Phone** keeps the familiar Material app bar + bottom navigation.
+///  - **Desktop** makes the map the whole window with no chrome; the two other
+///    sections open as floating right-side panels from round bubble buttons over
+///    the map.
 class HomeShell extends StatefulWidget {
   /// Passed through to [MapScreen]; only widget tests set it.
   final TileProvider? mapTileProvider;
@@ -27,8 +28,15 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
+/// Which floating section panel is open on desktop.
+enum _Panel { none, trips, browse }
+
 class _HomeShellState extends State<HomeShell> {
+  /// Phone-only: the selected bottom-nav tab.
   int _index = 0;
+
+  /// Desktop-only: the open right-side panel.
+  _Panel _panel = _Panel.none;
 
   static const _titles = ['地图', '旅途', '浏览'];
 
@@ -46,41 +54,100 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final desktop = MediaQuery.sizeOf(context).width >= _desktopBreakpoint;
-    // expand: children that fill (the map's Stack, the trips ListView) collapse
-    // to zero under IndexedStack's default loose constraints, so force them to
-    // fill the body.
-    final body = IndexedStack(
-      sizing: StackFit.expand,
-      index: _index,
-      children: _screens,
-    );
+    return desktop ? _buildDesktop(context) : _buildMobile(context);
+  }
+
+  // ---- Desktop: fullscreen map + floating bubbles + right-side panel --------
+
+  Widget _buildDesktop(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    // ~450 wide, but never so wide it crowds a small desktop window.
+    final panelWidth = size.width - 40 < 450 ? size.width - 40 : 450.0;
 
     return Scaffold(
-      // Desktop swaps the tall Material app bar for a slim title strip, but
-      // keeps the body as a plain IndexedStack so its children size normally.
-      appBar: desktop
-          ? PreferredSize(
-              preferredSize: const Size.fromHeight(50),
-              child: _DesktopHeader(
-                section: _titles[_index],
-                onSignOut: widget.onSignOut,
-              ),
-            )
-          : AppBar(
-              title: Text(_titles[_index]),
-              centerTitle: true,
-              actions: [
-                if (widget.onSignOut != null)
-                  IconButton(
-                    icon: const Icon(Icons.logout),
+      body: Stack(
+        children: [
+          // The map is the default view and fills the whole window, no chrome.
+          Positioned.fill(child: _screens[0]),
+
+          // Round bubbles for the two management sections (and exit), top-left.
+          Positioned(
+            left: 20,
+            top: 20,
+            child: Column(
+              children: [
+                _Bubble(
+                  icon: Icons.list_alt,
+                  tooltip: '旅途',
+                  selected: _panel == _Panel.trips,
+                  onTap: () => _togglePanel(_Panel.trips),
+                ),
+                const SizedBox(height: 14),
+                _Bubble(
+                  icon: Icons.explore,
+                  tooltip: '浏览',
+                  selected: _panel == _Panel.browse,
+                  onTap: () => _togglePanel(_Panel.browse),
+                ),
+                if (widget.onSignOut != null) ...[
+                  const SizedBox(height: 14),
+                  _Bubble(
+                    icon: Icons.logout,
                     tooltip: '退出',
-                    onPressed: widget.onSignOut,
+                    small: true,
+                    onTap: widget.onSignOut!,
                   ),
+                ],
               ],
             ),
-      body: body,
+          ),
+
+          // The selected section, as a floating right-side panel (~450 wide).
+          if (_panel != _Panel.none)
+            Positioned(
+              top: 20,
+              right: 20,
+              bottom: 20,
+              width: panelWidth,
+              child: _SidePanel(
+                title: _panel == _Panel.trips ? '旅途' : '浏览',
+                onClose: () => setState(() => _panel = _Panel.none),
+                child: _panel == _Panel.trips
+                    ? const TripsScreen()
+                    : const BrowseScreen(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _togglePanel(_Panel p) =>
+      setState(() => _panel = _panel == p ? _Panel.none : p);
+
+  // ---- Phone: app bar + bottom navigation (unchanged) ----------------------
+
+  Widget _buildMobile(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_titles[_index]),
+        centerTitle: true,
+        actions: [
+          if (widget.onSignOut != null)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: '退出',
+              onPressed: widget.onSignOut,
+            ),
+        ],
+      ),
+      body: IndexedStack(
+        sizing: StackFit.expand,
+        index: _index,
+        children: _screens,
+      ),
       // The trips tab creates trips from a row at the top of its list, so it
-      // has no FAB. The map/type tabs add a record — icon only, no label.
+      // has no FAB. The map/browse tabs add a record — icon only, no label.
       floatingActionButton: _index == 1
           ? null
           : FloatingActionButton(
@@ -88,26 +155,24 @@ class _HomeShellState extends State<HomeShell> {
               onPressed: _createEntry,
               child: const Icon(Icons.add),
             ),
-      bottomNavigationBar: desktop
-          ? _DesktopNavBar(index: _index, onSelect: _select)
-          : NavigationBar(
-              selectedIndex: _index,
-              onDestinationSelected: _select,
-              destinations: const [
-                NavigationDestination(
-                    icon: Icon(Icons.map_outlined),
-                    selectedIcon: Icon(Icons.map),
-                    label: '地图'),
-                NavigationDestination(
-                    icon: Icon(Icons.list_alt_outlined),
-                    selectedIcon: Icon(Icons.list_alt),
-                    label: '旅途'),
-                NavigationDestination(
-                    icon: Icon(Icons.explore_outlined),
-                    selectedIcon: Icon(Icons.explore),
-                    label: '浏览'),
-              ],
-            ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: _select,
+        destinations: const [
+          NavigationDestination(
+              icon: Icon(Icons.map_outlined),
+              selectedIcon: Icon(Icons.map),
+              label: '地图'),
+          NavigationDestination(
+              icon: Icon(Icons.list_alt_outlined),
+              selectedIcon: Icon(Icons.list_alt),
+              label: '旅途'),
+          NavigationDestination(
+              icon: Icon(Icons.explore_outlined),
+              selectedIcon: Icon(Icons.explore),
+              label: '浏览'),
+        ],
+      ),
     );
   }
 
@@ -128,109 +193,93 @@ class _HomeShellState extends State<HomeShell> {
   }
 }
 
-/// Slim desktop title strip: app name + current section on the left, exit on
-/// the right — a fraction of the height of a Material app bar.
-class _DesktopHeader extends StatelessWidget {
-  final String section;
-  final VoidCallback? onSignOut;
+/// A round, floating button over the map — the desktop entry point to a section.
+class _Bubble extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool selected;
+  final bool small;
 
-  const _DesktopHeader({required this.section, this.onSignOut});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 10, 8),
-      child: Row(
-        children: [
-          Text('旅行日志',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(width: 10),
-          Text(section,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: theme.hintColor)),
-          const Spacer(),
-          if (onSignOut != null)
-            IconButton(
-              icon: const Icon(Icons.logout, size: 20),
-              tooltip: '退出',
-              visualDensity: VisualDensity.compact,
-              onPressed: onSignOut,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Compact, centred bottom nav for desktop — selected item shows a pill.
-class _DesktopNavBar extends StatelessWidget {
-  final int index;
-  final ValueChanged<int> onSelect;
-
-  const _DesktopNavBar({required this.index, required this.onSelect});
+  const _Bubble({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.selected = false,
+    this.small = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: theme.dividerColor)),
-      ),
-      child: SafeArea(
-        top: false,
-        // A fixed height so the bar doesn't greedily fill the window and starve
-        // the body of vertical space.
-        child: SizedBox(
-          height: 56,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _item(context, 0, Icons.map_outlined, Icons.map, '地图'),
-                  _item(context, 1, Icons.list_alt_outlined, Icons.list_alt,
-                      '旅途'),
-                  _item(context, 2, Icons.explore_outlined, Icons.explore,
-                      '浏览'),
-                ],
-              ),
-            ),
+    final scheme = Theme.of(context).colorScheme;
+    final d = small ? 44.0 : 56.0;
+    final bg = selected ? scheme.primary : scheme.surface;
+    final fg = selected ? scheme.onPrimary : scheme.onSurfaceVariant;
+
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: bg,
+        elevation: 3,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: d,
+            height: d,
+            child: Icon(icon, color: fg, size: small ? 20 : 24),
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _item(BuildContext context, int i, IconData icon, IconData selectedIcon,
-      String label) {
+/// The floating right-hand panel that hosts a section (trips / browse) on
+/// desktop: a rounded card with a title bar, a close button, and the section
+/// widget filling the rest.
+class _SidePanel extends StatelessWidget {
+  final String title;
+  final Widget child;
+  final VoidCallback onClose;
+
+  const _SidePanel({
+    required this.title,
+    required this.child,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final selected = i == index;
-    final fg = selected
-        ? theme.colorScheme.onSecondaryContainer
-        : theme.colorScheme.onSurfaceVariant;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: () => onSelect(i),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: selected
-            ? BoxDecoration(
-                color: theme.colorScheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(20),
-              )
-            : null,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(selected ? selectedIcon : icon, size: 20, color: fg),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: fg, fontSize: 13)),
-          ],
-        ),
+    return Material(
+      elevation: 6,
+      color: theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 6, 10),
+            child: Row(
+              children: [
+                Text(title,
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: '关闭',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onClose,
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(child: child),
+        ],
       ),
     );
   }

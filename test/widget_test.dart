@@ -31,6 +31,22 @@ class _OfflineTileProvider extends TileProvider {
 }
 
 void main() {
+  // These flows are written against the phone shell (bottom nav + FAB). The
+  // default test window is 800px wide, which now crosses into the desktop
+  // map-shell, so pin the window to a phone width for every test here.
+  setUp(() {
+    final view =
+        TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher.implicitView!;
+    view.physicalSize = const Size(400, 800);
+    view.devicePixelRatio = 1.0;
+  });
+  tearDown(() {
+    final view =
+        TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher.implicitView!;
+    view.resetPhysicalSize();
+    view.resetDevicePixelRatio();
+  });
+
   Widget app() => TravelLogApp(
         repository: MockTravelRepository(),
         mapTileProvider: _OfflineTileProvider(),
