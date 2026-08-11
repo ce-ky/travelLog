@@ -61,6 +61,51 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   static const double _wheelMaxZoom = 20;
 
   @override
+  void initState() {
+    super.initState();
+    // After the first frame (a live GPU context exists), warm the one-off
+    // CanvasKit compiles the record bubble triggers. See [_warmUpBubble].
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _warmUpBubble();
+    });
+  }
+
+  /// Pre-compiles the first-frame CanvasKit work that opening a record bubble
+  /// triggers, so the *first* record tap doesn't stutter (it's smooth on the
+  /// second because these are cached after the first paint).
+  ///
+  /// On CanvasKit/web the costly one-offs are: rasterizing a colour emoji — the
+  /// marker glyphs (⛩️/📷/✍️/🎨/🌙) and 📍 — which compiles a dedicated emoji
+  /// shader and seeds the colour-glyph atlas; text shaping; and the bubble's
+  /// rounded-rect anti-aliased clip. The map draws none of these before a record
+  /// is opened, so the first bubble pays all of it at once. Rendering them once
+  /// offscreen here moves that cost to startup.
+  ///
+  /// [Picture.toImageSync] rasterizes into the same shared GPU context the map
+  /// uses, so the compiled programs and glyph atlas are cache hits when the real
+  /// bubble draws. Best-effort: any failure just forgoes the warm-up.
+  void _warmUpBubble() {
+    try {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      // Rounded-rect AA clip, matching the bubble's ClipRRect.
+      canvas.clipRRect(RRect.fromRectAndRadius(
+          const Rect.fromLTWH(0, 0, 80, 80), const Radius.circular(8)));
+      // Colour emoji + latin + CJK, matching the glyph + title/body text.
+      final builder = ui.ParagraphBuilder(ui.ParagraphStyle(fontSize: 20))
+        ..addText('📍⛩️📷✍️🎨🌙 记录 Ag');
+      final paragraph = builder.build()
+        ..layout(const ui.ParagraphConstraints(width: 200));
+      canvas.drawParagraph(paragraph, Offset.zero);
+      final picture = recorder.endRecording();
+      picture.toImageSync(80, 80).dispose();
+      picture.dispose();
+    } catch (_) {
+      // Warm-up is a pure optimization; never let it break the screen.
+    }
+  }
+
+  @override
   void dispose() {
     _moveController?.dispose();
     _hover.dispose();
