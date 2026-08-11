@@ -421,8 +421,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         // A flowing Catmull-Rom curve through the records rather than raw
         // straight hops, so a trip's path reads as one continuous journey.
         points: _smoothCurve([for (final e in list) e.location!.latLng]),
-        color: _tripColor(tripId),
-        strokeWidth: 3,
+        // A thin dark-grey dashed line for every trip — a quiet route hint that
+        // doesn't compete with the records themselves (trips are still told
+        // apart by their cluster colour when zoomed out).
+        color: Colors.grey.shade700,
+        strokeWidth: 1.5,
+        pattern: StrokePattern.dashed(segments: const [7, 6]),
       ));
     });
 
@@ -567,7 +571,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           child: _HoverBounce(
                             alignment: Alignment.bottomCenter,
                             child: _EntryMarker(
-                              entry: e,
                               onTap: () => _selectEntry(e),
                             ),
                           ),
@@ -1033,27 +1036,20 @@ class _TripCluster extends StatelessWidget {
   }
 }
 
-/// A plain teardrop (map-pin) marker. Colour tells the record apart by whether
-/// it carries an image: white when it has none, green when it does.
+/// A plain teardrop (map-pin) marker. Every record's pin is the same
+/// translucent-white material — a uniform, quiet marker regardless of whether
+/// the record carries an image.
 class _EntryMarker extends StatelessWidget {
-  final Entry entry;
   final VoidCallback onTap;
 
-  const _EntryMarker({required this.entry, required this.onTap});
+  const _EntryMarker({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = entry.hasImage;
-    final primary = Theme.of(context).colorScheme.primary;
-
-    final fill = hasImage ? primary : Colors.white;
-    final Color border;
-    if (hasImage) {
-      final hsl = HSLColor.fromColor(primary);
-      border = hsl.withLightness((hsl.lightness - 0.12).clamp(0.0, 1.0)).toColor();
-    } else {
-      border = Colors.grey.shade500;
-    }
+    // One shared look for all pins: a semi-transparent white fill (the map
+    // shows faintly through) with a hairline grey rim to hold its edge.
+    final fill = Colors.white.withValues(alpha: 0.7);
+    final border = Colors.grey.shade400;
 
     return GestureDetector(
       onTap: onTap,
