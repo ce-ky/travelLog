@@ -61,6 +61,48 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   static const double _wheelMaxZoom = 20;
 
   @override
+  void initState() {
+    super.initState();
+    // Warm the custom-paint shaders up front, after the first frame has a live
+    // GPU context. See [_warmUpShaders].
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _warmUpShaders();
+    });
+  }
+
+  /// Pre-compiles the shaders used by the map's hand-painted markers so the
+  /// first record tap doesn't stutter.
+  ///
+  /// The teardrop pins and the bubble both paint a drop shadow via
+  /// [Canvas.drawShadow], whose GPU shader (and, on CanvasKit/web, the shadow
+  /// geometry program) is compiled lazily the *first* time that paint actually
+  /// rasterizes. For the selected-entry bubble ([_BubblePainter]) that first
+  /// time is the first time a record is tapped — so the compile lands as a
+  /// one-off hitch exactly on the first click, then never again (hence "smooth
+  /// on the second click"). Rasterizing the same painters once offscreen here
+  /// forces those shaders into the shared context ahead of any interaction.
+  ///
+  /// [Picture.toImageSync] rasterizes on the raster thread into the same GPU
+  /// context the on-screen map uses, so the compiled programs are cache hits
+  /// when the real bubble/pins draw. Best-effort: any failure (e.g. a platform
+  /// without sync rasterization) is swallowed — it only forgoes the warm-up.
+  void _warmUpShaders() {
+    try {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      _BubblePainter(tailHeight: _ExpandedBubble.tailHeight)
+          .paint(canvas, const Size(250, 280));
+      _TeardropPainter(fill: Colors.white, border: Colors.grey)
+          .paint(canvas, const Size(30, 40));
+      final picture = recorder.endRecording();
+      picture.toImageSync(260, 300).dispose();
+      picture.dispose();
+    } catch (_) {
+      // Warm-up is a pure optimization; never let it break the screen.
+    }
+  }
+
+  @override
   void dispose() {
     _moveController?.dispose();
     _hover.dispose();
