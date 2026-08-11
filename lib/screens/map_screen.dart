@@ -61,51 +61,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   static const double _wheelMaxZoom = 20;
 
   @override
-  void initState() {
-    super.initState();
-    // Warm the custom-paint shaders up front, after the first frame has a live
-    // GPU context. See [_warmUpShaders].
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _warmUpShaders();
-    });
-  }
-
-  /// Pre-compiles the shaders used by the map's hand-painted markers so the
-  /// first record tap doesn't stutter.
-  ///
-  /// The teardrop pins and the bubble both paint a drop shadow via
-  /// [Canvas.drawShadow], whose GPU shader (and, on CanvasKit/web, the shadow
-  /// geometry program) is compiled lazily the *first* time that paint actually
-  /// rasterizes. For the selected-entry bubble ([_BubblePainter]) that first
-  /// time is the first time a record is tapped — so the compile lands as a
-  /// one-off hitch exactly on the first click, then never again (hence "smooth
-  /// on the second click"). Rasterizing the same painters once offscreen here
-  /// forces those shaders into the shared context ahead of any interaction.
-  ///
-  /// [Picture.toImageSync] rasterizes on the raster thread into the same GPU
-  /// context the on-screen map uses, so the compiled programs are cache hits
-  /// when the real bubble/pins draw. Best-effort: any failure (e.g. a platform
-  /// without sync rasterization) is swallowed — it only forgoes the warm-up.
-  void _warmUpShaders() {
-    try {
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      _BubblePainter(tailHeight: _ExpandedBubble.tailHeight)
-          .paint(canvas, const Size(250, 280));
-      _TeardropPainter(fill: Colors.white, border: Colors.grey)
-          .paint(canvas, const Size(30, 40));
-      final picture = recorder.endRecording();
-      picture.toImageSync(260, 300).dispose();
-      picture.dispose();
-    } catch (_) {
-      // Warm-up is a pure optimization; never let it break the screen.
-    }
-  }
-
-  @override
   void dispose() {
     _moveController?.dispose();
     _hover.dispose();
+    _selectedN.dispose();
     super.dispose();
   }
 
@@ -169,11 +128,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  /// The entry whose preview popup is shown, if any.
-  Entry? _selected;
+  /// The entry whose preview popup is shown, if any. Held in a notifier (not
+  /// plain setState) so selecting or closing a record rebuilds *only* the
+  /// bubble overlay layer — not the whole FlutterMap subtree (tiles, lines and
+  /// every marker), which is what made the first record tap stutter.
+  final ValueNotifier<Entry?> _selectedN = ValueNotifier(null);
 
   /// The point where a new-entry form popup is open, if any. Mutually exclusive
-  /// with [_selected].
+  /// with [_selectedN].
   LatLng? _addingPoint;
 
   /// The trip whose records fill the right-hand panel (wide layout only), set by
@@ -203,19 +165,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       if (!created || !mounted) return;
     }
     if (!mounted) return;
-    setState(() {
-      _selected = null;
-      _addingPoint = point;
-    });
+    _selectedN.value = null;
+    setState(() => _addingPoint = point);
   }
 
   /// Centres the map on [entry] and expands its card. Shared by tapping a
   /// marker and by saving a new located record, so both give the same feedback.
   void _selectEntry(Entry entry) {
-    setState(() {
-      _addingPoint = null;
-      _selected = entry;
-    });
+    // Selecting only flips the bubble-overlay notifier — no setState — so the
+    // whole FlutterMap subtree isn't rebuilt on every record tap. Dismissing an
+    // open add-popup is the one case that still needs a full rebuild.
+    if (_addingPoint != null) setState(() => _addingPoint = null);
+    _selectedN.value = entry;
     final loc = entry.location;
     if (loc != null) {
       _wheelTargetZoom = null;
@@ -229,10 +190,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       // card so the just-saved entry is front-and-centre.
       _selectEntry(entry);
     } else {
-      setState(() {
-        _addingPoint = null;
-        _selected = null;
-      });
+      _selectedN.value = null;
+      setState(() => _addingPoint = null);
     }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('记录已保存')),
@@ -242,10 +201,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// Tapping a trip cluster zooms the map to fit that trip's records, which
   /// crosses [_recordZoom] and expands them back into individual bubbles.
   void _fitTrip(List<LatLng> points) {
-    setState(() {
-      _selected = null;
-      _addingPoint = null;
-    });
+    _selectedN.value = null;
+    setState(() => _addingPoint = null);
     if (points.length == 1) {
       _map.move(points.first, _recordZoom + 2);
     } else {
@@ -268,8 +225,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   void _openTripPanel(String tripId, List<LatLng> points) {
     final wide = MediaQuery.sizeOf(context).width >= _panelBreakpoint;
     if (wide) {
+      _selectedN.value = null;
       setState(() {
-        _selected = null;
         _addingPoint = null;
         _panelTripId = tripId;
       });
@@ -298,9 +255,16 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       _panelTripId = null;
     }
 
-    // If the selected entry was deleted/filtered out, drop the popup.
-    if (_selected != null && !entries.any((e) => e.id == _selected!.id)) {
-      _selected = null;
+    // If the selected entry was deleted/filtered out, drop the popup. The
+    // notifier write is deferred out of build (mutating it here would mark the
+    // overlay layer dirty mid-build).
+    final selected = _selectedN.value;
+    if (selected != null && !entries.any((e) => e.id == selected.id)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _selectedN.value?.id == selected.id) {
+          _selectedN.value = null;
+        }
+      });
     }
 
     final center = entries.isNotEmpty
@@ -344,7 +308,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           child: MouseRegion(
           onHover: (e) {
             _hover.value = (_zoom >= _addZoom &&
-                    _selected == null &&
+                    _selectedN.value == null &&
                     _addingPoint == null)
                 ? e.localPosition
                 : null;
@@ -372,11 +336,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 ),
                 onTap: (_, point) {
                   // An open popup (preview or add form) gets dismissed first.
-                  if (_selected != null || _addingPoint != null) {
-                    setState(() {
-                      _selected = null;
-                      _addingPoint = null;
-                    });
+                  if (_selectedN.value != null || _addingPoint != null) {
+                    _selectedN.value = null;
+                    if (_addingPoint != null) {
+                      setState(() => _addingPoint = null);
+                    }
                   } else if (_zoom < _addZoom) {
                     // Not zoomed in enough to place a record precisely — zoom
                     // (animated) toward the tapped point instead of adding.
@@ -451,24 +415,24 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           ),
                         )
                     else
-                      // Zoomed in: individual record bubbles (except the selected
-                      // one, drawn expanded, last, on top).
+                      // Zoomed in: individual record pins. The selected one keeps
+                      // its pin (the expanded bubble, a separate layer below, sits
+                      // on top of it) so this list never rebuilds on selection.
                       for (final e in entries)
-                        if (_selected?.id != e.id)
-                          Marker(
-                            point: e.location!.latLng,
-                            width: 30,
-                            height: 40,
-                            // Bottom-centre (the teardrop tip) sits on the point.
-                            alignment: Alignment.topCenter,
-                            child: _HoverBounce(
-                              alignment: Alignment.bottomCenter,
-                              child: _EntryMarker(
-                                entry: e,
-                                onTap: () => _selectEntry(e),
-                              ),
+                        Marker(
+                          point: e.location!.latLng,
+                          width: 30,
+                          height: 40,
+                          // Bottom-centre (the teardrop tip) sits on the point.
+                          alignment: Alignment.topCenter,
+                          child: _HoverBounce(
+                            alignment: Alignment.bottomCenter,
+                            child: _EntryMarker(
+                              entry: e,
+                              onTap: () => _selectEntry(e),
                             ),
                           ),
+                        ),
                     // A pulsing pin marks exactly where the tap landed while the
                     // add-record popup is open.
                     if (_addingPoint != null)
@@ -478,20 +442,34 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         height: 72,
                         child: const _PulsePin(),
                       ),
-                    // The selected entry: the bubble expands in place into its
-                    // content. Only in the records (zoomed-in) view.
-                    if (!_collapsed && _selected != null)
-                      Marker(
-                        point: _selected!.location!.latLng,
-                        width: 250,
-                        height: 280,
-                        alignment: Alignment.topCenter,
-                        child: _ExpandedBubble(
-                          entry: _selected!,
-                          onClose: () => setState(() => _selected = null),
-                        ),
-                      ),
                   ],
+                ),
+                // The selected entry's expanded bubble, in its own layer driven
+                // by _selectedN. Selecting/closing a record rebuilds only this
+                // ValueListenableBuilder — not the tiles, lines or marker list —
+                // so the first tap no longer stutters on a full-map rebuild.
+                ValueListenableBuilder<Entry?>(
+                  valueListenable: _selectedN,
+                  builder: (context, selected, _) {
+                    // Only in the records (zoomed-in) view.
+                    if (_collapsed || selected?.location == null) {
+                      return const MarkerLayer(markers: []);
+                    }
+                    return MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: selected!.location!.latLng,
+                          width: 250,
+                          height: 280,
+                          alignment: Alignment.topCenter,
+                          child: _ExpandedBubble(
+                            entry: selected,
+                            onClose: () => _selectedN.value = null,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
