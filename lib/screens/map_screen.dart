@@ -1298,13 +1298,16 @@ class _FrostedBubble extends StatelessWidget {
 }
 
 /// Clips a bubble's contents (blur + fill) to the shared tailed outline.
-class _BubbleClipper extends CustomClipper<Path> {
+///
+/// The clip type is spelled `ui.Path` explicitly: latlong2 also exports a
+/// `Path` (a geographic path), so a bare `Path` here binds to the wrong type.
+class _BubbleClipper extends CustomClipper<ui.Path> {
   final double tailHeight;
 
   _BubbleClipper({required this.tailHeight});
 
   @override
-  Path getClip(Size size) => _bubblePath(size, tailHeight);
+  ui.Path getClip(Size size) => _bubblePath(size, tailHeight);
 
   @override
   bool shouldReclip(_BubbleClipper old) => old.tailHeight != tailHeight;
