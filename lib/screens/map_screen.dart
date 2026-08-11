@@ -105,6 +105,83 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
+  /// Warms the glyphs each loaded record's bubble will paint — its marker glyph,
+  /// title, place name and body text (CJK included) — so the *first* tap on a
+  /// given record doesn't stall while CanvasKit shapes and rasterizes those
+  /// glyphs onto the atlas for the first time (which is why the same record is
+  /// smooth on the second tap, but every *new* record stutters once).
+  ///
+  /// Runs in small batches chained across frames so it never blocks startup, and
+  /// records each warmed id so a record is only ever warmed once. Best-effort.
+  void _scheduleEntryTextWarmup(List<Entry> entries) {
+    final batch = <Entry>[];
+    for (final e in entries) {
+      if (_warmedTextIds.add(e.id)) batch.add(e);
+      if (batch.length >= 8) break; // cap per frame to keep startup smooth
+    }
+    if (batch.isEmpty) {
+      _textWarmupRunning = false;
+      return;
+    }
+    _textWarmupRunning = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        _textWarmupRunning = false;
+        return;
+      }
+      _rasterizeEntryText(batch);
+      // Continue with any remaining (or newly-added) records next frame.
+      _scheduleEntryTextWarmup(entries);
+    });
+  }
+
+  /// Rasterizes one batch of records' bubble text offscreen, stacking each into
+  /// a single picture so every glyph actually paints (and thus warms the atlas).
+  void _rasterizeEntryText(List<Entry> batch) {
+    try {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      // The bubble caps the body at 5 lines; ~200px covers glyph + title + place
+      // + those lines at the bubble's inner width.
+      const slot = 200.0;
+      const width = 226.0;
+      var y = 0.0;
+      for (final e in batch) {
+        final place = e.location?.placeName ?? '';
+        // Match the sizes the real bubble paints at — the glyph atlas is keyed
+        // by font size, so warming at a single size wouldn't cache them.
+        final pb = ui.ParagraphBuilder(ui.ParagraphStyle(fontSize: 14))
+          ..pushStyle(ui.TextStyle(fontSize: 20)) // marker glyph
+          ..addText('${e.markerGlyph} ')
+          ..pop()
+          ..pushStyle(ui.TextStyle(fontSize: 14)) // title
+          ..addText('${e.displayTitle}\n')
+          ..pop();
+        if (place.isNotEmpty) {
+          pb
+            ..pushStyle(ui.TextStyle(fontSize: 12)) // place name
+            ..addText('📍 $place\n')
+            ..pop();
+        }
+        if (e.body.isNotEmpty) {
+          pb
+            ..pushStyle(ui.TextStyle(fontSize: 14)) // body
+            ..addText(e.body)
+            ..pop();
+        }
+        final paragraph = pb.build()
+          ..layout(const ui.ParagraphConstraints(width: width));
+        canvas.drawParagraph(paragraph, Offset(0, y));
+        y += slot;
+      }
+      final picture = recorder.endRecording();
+      picture.toImageSync(width.ceil(), y.ceil().clamp(1, 4000)).dispose();
+      picture.dispose();
+    } catch (_) {
+      // Warm-up is a pure optimization; never let it break the screen.
+    }
+  }
+
   @override
   void dispose() {
     _moveController?.dispose();
@@ -178,6 +255,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// bubble overlay layer — not the whole FlutterMap subtree (tiles, lines and
   /// every marker), which is what made the first record tap stutter.
   final ValueNotifier<Entry?> _selectedN = ValueNotifier(null);
+
+  /// Record ids whose bubble text has already been warmed into the glyph atlas
+  /// (see [_scheduleEntryTextWarmup]), so each record is warmed only once.
+  final Set<String> _warmedTextIds = {};
+
+  /// True while a text-warmup batch chain is in flight, so [build] doesn't start
+  /// a second overlapping chain.
+  bool _textWarmupRunning = false;
 
   /// The point where a new-entry form popup is open, if any. Mutually exclusive
   /// with [_selectedN].
@@ -293,6 +378,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final entries = appState.locatedEntries;
+
+    // Warm each loaded record's bubble glyphs ahead of the first tap. Kicks off
+    // once here (and again when new records appear); the chain de-dupes per id.
+    if (!_textWarmupRunning &&
+        entries.any((e) => !_warmedTextIds.contains(e.id))) {
+      _scheduleEntryTextWarmup(entries);
+    }
 
     // A panel pointing at a since-deleted trip falls back to closed.
     if (_panelTripId != null &&
