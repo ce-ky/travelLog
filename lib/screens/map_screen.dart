@@ -929,7 +929,7 @@ class _TeardropPainter extends CustomPainter {
     );
     path.close();
 
-    canvas.drawShadow(path, Colors.black.withValues(alpha: 0.4), 2.5, false);
+    _paintSoftShadow(canvas, path, spread: 2.4, alpha: 0.16);
     canvas.drawPath(path, Paint()..color = fill);
     canvas.drawPath(
       path,
@@ -1092,12 +1092,38 @@ class _BubblePainter extends CustomPainter {
       ..arcToPoint(const Offset(r, 0), radius: const Radius.circular(r))
       ..close();
 
-    canvas.drawShadow(path, Colors.black.withValues(alpha: 0.5), 4, false);
+    _paintSoftShadow(canvas, path, spread: 4.0, alpha: 0.14);
     canvas.drawPath(path, Paint()..color = Colors.white);
   }
 
   @override
   bool shouldRepaint(_BubblePainter old) => old.tailHeight != tailHeight;
+}
+
+/// Draws a soft drop shadow for [path] by stacking a few downward-offset fills
+/// of the same shape, fading with distance.
+///
+/// This deliberately avoids [Canvas.drawShadow]: that call compiles a dedicated
+/// GPU shadow shader (plus, on CanvasKit/web, shadow geometry) lazily the first
+/// time it rasterizes — which for the map's markers is the first time a record
+/// is tapped, landing as a one-off stutter that's gone by the second tap. Plain
+/// path fills reuse the shader the solid shape itself already uses, so there's
+/// nothing new to compile and every tap is equally smooth. [spread] is the
+/// furthest offset (in px); [alpha] is each layer's opacity, which stacks toward
+/// the bottom for a graded edge.
+void _paintSoftShadow(
+  Canvas canvas,
+  ui.Path path, {
+  required double spread,
+  required double alpha,
+}) {
+  final paint = Paint()..color = Colors.black.withValues(alpha: alpha);
+  for (var i = 1; i <= 3; i++) {
+    canvas.save();
+    canvas.translate(0, spread * i / 3);
+    canvas.drawPath(path, paint);
+    canvas.restore();
+  }
 }
 
 /// A selectable base-map tile style. All entries here are free and keyless; the
