@@ -799,7 +799,11 @@ class _TripCluster extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: CustomPaint(
+      // Cache the painted cluster bubble (shape + text) as its own layer so a
+      // pan/zoom animation re-composites it instead of re-painting every
+      // cluster each frame. See the note in [_EntryMarker].
+      child: RepaintBoundary(
+        child: CustomPaint(
         painter: _BubblePainter(tailHeight: 10),
         child: Padding(
           padding: const EdgeInsets.only(bottom: 10),
@@ -841,6 +845,7 @@ class _TripCluster extends StatelessWidget {
             ),
           ),
         ),
+        ),
       ),
     );
   }
@@ -870,8 +875,16 @@ class _EntryMarker extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: CustomPaint(
-        painter: _TeardropPainter(fill: fill, border: border),
+      // RepaintBoundary caches the painted teardrop as its own layer, so during
+      // a map pan/zoom animation (or when the bubble appears) CanvasKit just
+      // re-composites the cached texture instead of re-running the painter for
+      // every visible pin each frame. Without it, N visible pins meant N
+      // re-paints per frame — the source of the "many pins on screen = stutter"
+      // behaviour.
+      child: RepaintBoundary(
+        child: CustomPaint(
+          painter: _TeardropPainter(fill: fill, border: border),
+        ),
       ),
     );
   }
