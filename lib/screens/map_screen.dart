@@ -418,7 +418,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       if (list.length < 2) return;
       list.sort((a, b) => a.timestamp.compareTo(b.timestamp));
       polylines.add(Polyline(
-        points: [for (final e in list) e.location!.latLng],
+        // A flowing Catmull-Rom curve through the records rather than raw
+        // straight hops, so a trip's path reads as one continuous journey.
+        points: _smoothCurve([for (final e in list) e.location!.latLng]),
         color: _tripColor(tripId),
         strokeWidth: 3,
       ));
@@ -753,14 +755,23 @@ class _AddHint extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.7),
-            borderRadius: BorderRadius.circular(6),
+        // Same frosted-white glass material as the map's other labels, blurring
+        // the map behind the hint instead of a solid black chip.
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.68),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.55)),
+              ),
+              child: const Text('点击此处添加记录',
+                  style: TextStyle(color: Colors.black87, fontSize: 11)),
+            ),
           ),
-          child: const Text('点击此处添加记录',
-              style: TextStyle(color: Colors.white, fontSize: 11)),
         ),
         Icon(Icons.place, color: primary, size: 26),
       ],
@@ -907,6 +918,45 @@ Color _tripColor(String tripId) {
   return HSLColor.fromAHSL(1, hue, 0.55, 0.45).toColor();
 }
 
+/// Densifies [pts] into a smooth Catmull-Rom spline so flutter_map draws the
+/// trip path as a flowing curve instead of straight point-to-point segments.
+///
+/// The spline passes *through* every original record (unlike a Bézier control
+/// hull), so the line still visibly connects each place; [samples] interpolated
+/// points per span set how smooth each bend is. Two points (or fewer) have no
+/// curvature to add, so they're returned unchanged.
+List<LatLng> _smoothCurve(List<LatLng> pts, {int samples = 18}) {
+  if (pts.length < 3) return pts;
+  final out = <LatLng>[];
+  for (var i = 0; i < pts.length - 1; i++) {
+    // The four points a Catmull-Rom span needs; ends duplicate the extremes so
+    // the curve starts and finishes exactly on the first and last record.
+    final p0 = pts[i == 0 ? 0 : i - 1];
+    final p1 = pts[i];
+    final p2 = pts[i + 1];
+    final p3 = pts[i + 2 < pts.length ? i + 2 : pts.length - 1];
+    for (var s = 0; s < samples; s++) {
+      final t = s / samples;
+      final t2 = t * t;
+      final t3 = t2 * t;
+      // Standard Catmull-Rom basis, applied to each axis independently. Over
+      // the short spans between records, lat/lng behaves flat enough that
+      // interpolating them directly gives a clean on-screen curve.
+      double axis(double a, double b, double c, double d) => 0.5 *
+          ((2 * b) +
+              (c - a) * t +
+              (2 * a - 5 * b + 4 * c - d) * t2 +
+              (3 * b - a - 3 * c + d) * t3);
+      out.add(LatLng(
+        axis(p0.latitude, p1.latitude, p2.latitude, p3.latitude),
+        axis(p0.longitude, p1.longitude, p2.longitude, p3.longitude),
+      ));
+    }
+  }
+  out.add(pts.last); // close on the final record (the loops stop just short)
+  return out;
+}
+
 /// Average position of a trip's located entries — where its cluster sits.
 LatLng _centroid(List<Entry> entries) {
   var lat = 0.0, lng = 0.0;
@@ -936,12 +986,8 @@ class _TripCluster extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      // Cache the painted cluster bubble (shape + text) as its own layer so a
-      // pan/zoom animation re-composites it instead of re-painting every
-      // cluster each frame. See the note in [_EntryMarker].
-      child: RepaintBoundary(
-        child: CustomPaint(
-        painter: _BubblePainter(tailHeight: 10),
+      child: _FrostedBubble(
+        tailHeight: 10,
         child: Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: Padding(
@@ -981,7 +1027,6 @@ class _TripCluster extends StatelessWidget {
               ],
             ),
           ),
-        ),
         ),
       ),
     );
@@ -1091,8 +1136,8 @@ class _ExpandedBubble extends StatelessWidget {
       // Absorb taps so tapping the card doesn't fall through to the map (which
       // would deselect it); only the close button closes it.
       onTap: () {},
-      child: CustomPaint(
-        painter: _BubblePainter(tailHeight: tailHeight),
+      child: _FrostedBubble(
+        tailHeight: tailHeight,
         child: Padding(
           padding: const EdgeInsets.only(bottom: tailHeight),
           child: ClipRRect(
@@ -1190,42 +1235,123 @@ class _ExpandedBubble extends StatelessWidget {
   }
 }
 
-/// Paints a rounded-rectangle bubble with a downward tail. Fill + drop shadow
-/// only (no border) — the shadow is what separates it from the map.
-class _BubblePainter extends CustomPainter {
+/// Builds the rounded-rectangle-with-downward-tail outline every map bubble
+/// shares — the cluster label and the expanded record card. Kept in one place
+/// so the shadow, the frosted-glass clip and the border all trace exactly the
+/// same shape. The tail tip sits at the bottom-centre (the map location).
+ui.Path _bubblePath(Size size, double tailHeight) {
+  const r = 8.0;
+  const tailW = 12.0;
+  final w = size.width;
+  final bodyH = size.height - tailHeight;
+  final cx = w / 2;
+
+  return ui.Path()
+    ..moveTo(r, 0)
+    ..lineTo(w - r, 0)
+    ..arcToPoint(Offset(w, r), radius: const Radius.circular(r))
+    ..lineTo(w, bodyH - r)
+    ..arcToPoint(Offset(w - r, bodyH), radius: const Radius.circular(r))
+    ..lineTo(cx + tailW / 2, bodyH)
+    ..lineTo(cx, size.height) // tail tip = the location
+    ..lineTo(cx - tailW / 2, bodyH)
+    ..lineTo(r, bodyH)
+    ..arcToPoint(Offset(0, bodyH - r), radius: const Radius.circular(r))
+    ..lineTo(0, r)
+    ..arcToPoint(const Offset(r, 0), radius: const Radius.circular(r))
+    ..close();
+}
+
+/// A translucent, frosted-glass bubble in the shared tailed shape: it blurs the
+/// map showing through, tints it with a soft white, and rims it with a hairline
+/// glass edge. Used for both the cluster label and the expanded record card so
+/// every on-map label reads as the same material.
+///
+/// Layering: a soft drop shadow paints *behind* (so it isn't blurred away), the
+/// blur + white tint fill the clipped shape, and the hairline border paints on
+/// *top* as a foreground so it stays crisp over the frosted fill.
+class _FrostedBubble extends StatelessWidget {
+  final double tailHeight;
+  final Widget child;
+
+  const _FrostedBubble({required this.tailHeight, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _BubbleShadowPainter(tailHeight: tailHeight),
+      foregroundPainter: _BubbleBorderPainter(tailHeight: tailHeight),
+      child: ClipPath(
+        clipper: _BubbleClipper(tailHeight: tailHeight),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          // Slightly translucent white so the blurred map tints through — the
+          // "毛玻璃" look — while text stays legible on top.
+          child: ColoredBox(
+            color: Colors.white.withValues(alpha: 0.68),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Clips a bubble's contents (blur + fill) to the shared tailed outline.
+///
+/// The clip type is spelled `ui.Path` explicitly: latlong2 also exports a
+/// `Path` (a geographic path), so a bare `Path` here binds to the wrong type.
+class _BubbleClipper extends CustomClipper<ui.Path> {
   final double tailHeight;
 
-  _BubblePainter({required this.tailHeight});
+  _BubbleClipper({required this.tailHeight});
+
+  @override
+  ui.Path getClip(Size size) => _bubblePath(size, tailHeight);
+
+  @override
+  bool shouldReclip(_BubbleClipper old) => old.tailHeight != tailHeight;
+}
+
+/// Paints only the soft drop shadow of a bubble, behind its frosted fill — the
+/// shadow is what lifts the translucent label off the map.
+class _BubbleShadowPainter extends CustomPainter {
+  final double tailHeight;
+
+  _BubbleShadowPainter({required this.tailHeight});
 
   @override
   void paint(Canvas canvas, Size size) {
-    const r = 8.0;
-    const tailW = 12.0;
-    final w = size.width;
-    final bodyH = size.height - tailHeight;
-    final cx = w / 2;
-
-    final path = ui.Path()
-      ..moveTo(r, 0)
-      ..lineTo(w - r, 0)
-      ..arcToPoint(Offset(w, r), radius: const Radius.circular(r))
-      ..lineTo(w, bodyH - r)
-      ..arcToPoint(Offset(w - r, bodyH), radius: const Radius.circular(r))
-      ..lineTo(cx + tailW / 2, bodyH)
-      ..lineTo(cx, size.height) // tail tip = the location
-      ..lineTo(cx - tailW / 2, bodyH)
-      ..lineTo(r, bodyH)
-      ..arcToPoint(Offset(0, bodyH - r), radius: const Radius.circular(r))
-      ..lineTo(0, r)
-      ..arcToPoint(const Offset(r, 0), radius: const Radius.circular(r))
-      ..close();
-
-    _paintSoftShadow(canvas, path, spread: 4.0, alpha: 0.14);
-    canvas.drawPath(path, Paint()..color = Colors.white);
+    _paintSoftShadow(canvas, _bubblePath(size, tailHeight),
+        spread: 4.0, alpha: 0.14);
   }
 
   @override
-  bool shouldRepaint(_BubblePainter old) => old.tailHeight != tailHeight;
+  bool shouldRepaint(_BubbleShadowPainter old) =>
+      old.tailHeight != tailHeight;
+}
+
+/// Paints the hairline glass rim on top of the frosted fill, so the label has a
+/// defined edge against busy map tiles.
+class _BubbleBorderPainter extends CustomPainter {
+  final double tailHeight;
+
+  _BubbleBorderPainter({required this.tailHeight});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawPath(
+      _bubblePath(size, tailHeight),
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.55)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_BubbleBorderPainter old) =>
+      old.tailHeight != tailHeight;
 }
 
 /// Draws a soft drop shadow for [path] by stacking a few downward-offset fills
