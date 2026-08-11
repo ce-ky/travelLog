@@ -353,7 +353,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   _zoom = camera.zoom;
                   // The hover hint is only valid at add zoom; drop it otherwise.
                   if (_zoom < _addZoom) _hover.value = null;
-                  if (crossed || _selected != null || _addingPoint != null) {
+                  // Only rebuild when we truly must. The selected entry's bubble
+                  // is a Marker inside MarkerLayer, so flutter_map already keeps
+                  // it pinned as the camera moves — rebuilding the whole screen
+                  // for it every frame just makes panning heavier (and turns the
+                  // first-run shader/texture compile into a visible stutter). The
+                  // add-entry popup, by contrast, is a Positioned outside the map
+                  // and does need per-frame repositioning.
+                  if (crossed || _addingPoint != null) {
                     setState(() {});
                   }
                 },
