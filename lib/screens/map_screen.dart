@@ -1011,7 +1011,7 @@ List<LatLng> _centripetalCurve(List<LatLng> pts, {int samples = 18}) {
 
   for (var i = 1; i < p.length - 2; i++) {
     final p0 = p[i - 1], p1 = p[i], p2 = p[i + 1], p3 = p[i + 2];
-    final t0 = 0.0;
+    const t0 = 0.0;
     final t1 = knot(t0, p0, p1);
     final t2 = knot(t1, p1, p2);
     final t3 = knot(t2, p2, p3);
