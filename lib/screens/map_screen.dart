@@ -1037,49 +1037,51 @@ List<LatLng> _centripetalCurve(List<LatLng> pts, {int samples = 18}) {
   return out;
 }
 
-/// Connects [pts] with true **great-circle** arcs — the shortest path over the
-/// globe between consecutive records. On the Web-Mercator map these render as
-/// gently bowed "flight-path" curves rather than straight rhumb lines, which
-/// reads more naturally over the long hops between cities.
+/// Connects [pts] with gently bowed "flight-path" arcs — the aviation-map look.
 ///
-/// Each segment is sampled along the geodesic via spherical linear
-/// interpolation of the endpoints' unit vectors, so it stays correct across the
-/// antimeridian and near the poles (where a lat/lng lerp would not). Very short
-/// or coincident spans collapse to a straight join. Fewer than two points have
-/// nothing to connect.
-List<LatLng> _greatCircleCurve(List<LatLng> pts, {int samples = 24}) {
+/// A *true* great-circle geodesic is the honest answer, but over the short
+/// distances a travel log usually spans it is visually indistinguishable from a
+/// straight line on Web Mercator (it only bows perceptibly across continental,
+/// mostly east–west hops), so it renders dead straight for real trips. Instead,
+/// each segment is drawn as a shallow arc that bows a fixed [bulge] fraction of
+/// its length to one consistent side, so it reads as a curve at *any* scale.
+///
+/// The bow is computed in a local equirectangular frame (longitude scaled by
+/// cos(latitude)) so it looks perpendicular to the segment *on screen* instead
+/// of being skewed by longitude degrees shrinking away from the equator. Very
+/// short or coincident spans collapse to a straight join; fewer than two points
+/// have nothing to connect. [samples] sets each arc's smoothness.
+List<LatLng> _greatCircleCurve(List<LatLng> pts,
+    {int samples = 24, double bulge = 0.18}) {
   if (pts.length < 2) return pts;
-  const deg2rad = math.pi / 180, rad2deg = 180 / math.pi;
+  const deg2rad = math.pi / 180;
   final out = <LatLng>[pts.first];
   for (var i = 0; i < pts.length - 1; i++) {
     final a = pts[i], b = pts[i + 1];
-    final lat1 = a.latitude * deg2rad, lon1 = a.longitude * deg2rad;
-    final lat2 = b.latitude * deg2rad, lon2 = b.longitude * deg2rad;
-    // Endpoints as unit vectors on the sphere.
-    final x1 = math.cos(lat1) * math.cos(lon1),
-        y1 = math.cos(lat1) * math.sin(lon1),
-        z1 = math.sin(lat1);
-    final x2 = math.cos(lat2) * math.cos(lon2),
-        y2 = math.cos(lat2) * math.sin(lon2),
-        z2 = math.sin(lat2);
-    final omega =
-        math.acos((x1 * x2 + y1 * y2 + z1 * z2).clamp(-1.0, 1.0));
-    if (omega < 1e-6) {
-      out.add(b); // effectively the same point — nothing to interpolate.
+    // Local longitude scale, so a degree of longitude and a degree of latitude
+    // cover comparable screen distance around this segment.
+    final cosLat =
+        math.cos((a.latitude + b.latitude) / 2 * deg2rad).abs();
+    final k = cosLat < 1e-6 ? 1e-6 : cosLat;
+    // Planar coords: x is scaled longitude, y is latitude.
+    final ax = a.longitude * k, ay = a.latitude;
+    final bx = b.longitude * k, by = b.latitude;
+    final dx = bx - ax, dy = by - ay;
+    final len = math.sqrt(dx * dx + dy * dy);
+    if (len < 1e-9) {
+      out.add(b); // effectively the same point — nothing to bow.
       continue;
     }
-    final sinOmega = math.sin(omega);
+    // Control point: segment midpoint pushed out along the left-hand normal, so
+    // every segment bows the same way and none can come out perfectly straight.
+    final cx = (ax + bx) / 2 + (-dy / len) * len * bulge;
+    final cy = (ay + by) / 2 + (dx / len) * len * bulge;
     for (var s = 1; s <= samples; s++) {
-      final t = s / samples;
-      final k1 = math.sin((1 - t) * omega) / sinOmega;
-      final k2 = math.sin(t * omega) / sinOmega;
-      final x = k1 * x1 + k2 * x2;
-      final y = k1 * y1 + k2 * y2;
-      final z = k1 * z1 + k2 * z2;
-      out.add(LatLng(
-        math.atan2(z, math.sqrt(x * x + y * y)) * rad2deg,
-        math.atan2(y, x) * rad2deg,
-      ));
+      final t = s / samples, mt = 1 - t;
+      // Quadratic Bézier a → control → b, in the planar frame.
+      final px = mt * mt * ax + 2 * mt * t * cx + t * t * bx;
+      final py = mt * mt * ay + 2 * mt * t * cy + t * t * by;
+      out.add(LatLng(py, px / k)); // unscale longitude back to degrees
     }
   }
   return out;
@@ -1595,7 +1597,7 @@ const _mapStyles = <_MapStyle>[
 /// Each carries its own picker label, one-line description and icon.
 enum _CurveStyle {
   centripetal('向心曲线', '平滑穿过每个记录点，转弯自然、不打结', Icons.gesture),
-  greatCircle('大圆弧', '沿地球最短路径相连，长距离呈现航线弧', Icons.public);
+  greatCircle('大圆弧', '以航线般的弧线相连，任何距离都清晰可见', Icons.public);
 
   const _CurveStyle(this.label, this.description, this.icon);
 
