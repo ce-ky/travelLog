@@ -10,10 +10,15 @@ class EntryGroupedList extends StatelessWidget {
   final List<Entry> entries;
   final EdgeInsetsGeometry padding;
 
+  /// When set, each card becomes tappable and reports its entry (used by the
+  /// map's records panel to zoom the map to that record).
+  final void Function(Entry entry)? onEntryTap;
+
   const EntryGroupedList({
     super.key,
     required this.entries,
     this.padding = const EdgeInsets.only(bottom: 12),
+    this.onEntryTap,
   });
 
   @override
@@ -32,7 +37,10 @@ class EntryGroupedList extends StatelessWidget {
             style: const TextStyle(
                 fontWeight: FontWeight.bold, color: Colors.grey)),
       ));
-      children.addAll(items.map((e) => EntryCard(entry: e)));
+      children.addAll(items.map((e) => EntryCard(
+            entry: e,
+            onTap: onEntryTap == null ? null : () => onEntryTap!(e),
+          )));
     });
 
     return ListView(padding: padding, children: children);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../models/entry.dart';
 import '../state/app_state.dart';
 import 'entry_grouped_list.dart';
 
@@ -16,7 +17,15 @@ class TripRecordsPanel extends StatelessWidget {
   /// When provided, a close button is shown in the header.
   final VoidCallback? onClose;
 
-  const TripRecordsPanel({super.key, required this.tripId, this.onClose});
+  /// When provided, tapping a record reports it (the map zooms to its location).
+  final void Function(Entry entry)? onRecordTap;
+
+  const TripRecordsPanel({
+    super.key,
+    required this.tripId,
+    this.onClose,
+    this.onRecordTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -63,11 +72,13 @@ class TripRecordsPanel extends StatelessWidget {
             ],
           ),
         ),
-        const Divider(height: 1),
+        // A faint hairline instead of a full-strength divider, so the header
+        // reads as part of one clean surface rather than a boxed-off section.
+        Divider(height: 1, thickness: 1, color: theme.dividerColor.withValues(alpha: 0.4)),
         Expanded(
           child: entries.isEmpty
               ? _centeredHint(theme, Icons.notes_outlined, '这趟旅途还没有记录')
-              : EntryGroupedList(entries: entries),
+              : EntryGroupedList(entries: entries, onEntryTap: onRecordTap),
         ),
       ],
     );
