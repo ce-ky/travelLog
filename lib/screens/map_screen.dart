@@ -15,13 +15,31 @@ import 'entry_form.dart';
 import 'new_trip_sheet.dart';
 import 'trip_detail_screen.dart';
 
+/// A one-way command channel from the desktop side panels into the map: the
+/// 旅途 panel asks the map to open a trip's floating records panel (and fit it
+/// on the map), so browsing a trip from the nav lands in the very same floating
+/// experience as tapping the trip's cluster on the map. Re-issuing the same
+/// trip still fires, so tapping a trip twice re-opens it.
+class MapCommands extends ChangeNotifier {
+  String? _openTripId;
+  String? get openTripId => _openTripId;
+
+  void openTrip(String tripId) {
+    _openTripId = tripId;
+    notifyListeners();
+  }
+}
+
 /// View 1: a single map with custom-glyph markers pinned at each located entry.
 class MapScreen extends StatefulWidget {
   /// Overridable so widget tests can supply an offline provider instead of
   /// hitting the real OSM tile servers.
   final TileProvider? tileProvider;
 
-  const MapScreen({super.key, this.tileProvider});
+  /// Optional channel the desktop 旅途 panel uses to open a trip on the map.
+  final MapCommands? commands;
+
+  const MapScreen({super.key, this.tileProvider, this.commands});
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -68,6 +86,19 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _warmUpBubble();
     });
+    widget.commands?.addListener(_onCommand);
+  }
+
+  /// Opens the trip the 旅途 panel asked for as the map's floating records
+  /// panel (and fits it on the map) — the same panel a cluster tap opens.
+  void _onCommand() {
+    final tripId = widget.commands?.openTripId;
+    if (tripId == null) return;
+    final points = [
+      for (final e in context.read<AppState>().entriesForTrip(tripId))
+        if (e.location != null) e.location!.latLng,
+    ];
+    _openTripPanel(tripId, points);
   }
 
   /// Pre-compiles the first-frame CanvasKit work that opening a record bubble
@@ -184,6 +215,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    widget.commands?.removeListener(_onCommand);
     _moveController?.dispose();
     _hover.dispose();
     _selectedN.dispose();
@@ -333,6 +365,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   void _fitTrip(List<LatLng> points) {
     _selectedN.value = null;
     setState(() => _addingPoint = null);
+    // A trip whose records carry no location: open its panel but leave the
+    // camera where it is (there's nothing to fit).
+    if (points.isEmpty) return;
     if (points.length == 1) {
       _map.move(points.first, _recordZoom + 2);
     } else {
