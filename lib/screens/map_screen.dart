@@ -49,12 +49,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   final MapController _map = MapController();
 
   /// Selected base-map style (index into [_mapStyles]); switchable at runtime
-  /// from the layers button in the bottom-left corner.
+  /// from the settings button in the bottom-left corner.
   int _styleIndex = 0;
 
   /// Hides the place-name label overlay on styles that ship one as a separate
   /// layer (the CARTO family); baked-label styles ignore it.
   bool _labelsHidden = false;
+
+  /// How each trip's records are joined into a route line. The two modes are
+  /// mutually exclusive and switched from the map settings dialog. See
+  /// [_centripetalCurve] and [_greatCircleCurve].
+  _CurveStyle _curveStyle = _CurveStyle.centripetal;
 
   /// Mouse hover position over the map (desktop/web), for the "click to add"
   /// hint shown once zoomed in enough. A notifier so moving the mouse rebuilds
@@ -99,6 +104,24 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         if (e.location != null) e.location!.latLng,
     ];
     _openTripPanel(tripId, points);
+  }
+
+  /// Opens the map settings dialog: base-map style, place-name visibility and
+  /// the route-line style. The dialog writes straight back through these
+  /// setters so the map updates live while it's open.
+  void _openSettings() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => _MapSettingsDialog(
+        styles: _mapStyles,
+        styleIndex: _styleIndex,
+        labelsHidden: _labelsHidden,
+        curveStyle: _curveStyle,
+        onStyle: (i) => setState(() => _styleIndex = i),
+        onLabels: (hidden) => setState(() => _labelsHidden = hidden),
+        onCurve: (curve) => setState(() => _curveStyle = curve),
+      ),
+    );
   }
 
   /// Pre-compiles the first-frame CanvasKit work that opening a record bubble
@@ -452,10 +475,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     byTrip.forEach((tripId, list) {
       if (list.length < 2) return;
       list.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      final located = [for (final e in list) e.location!.latLng];
       polylines.add(Polyline(
-        // A flowing Catmull-Rom curve through the records rather than raw
-        // straight hops, so a trip's path reads as one continuous journey.
-        points: _smoothCurve([for (final e in list) e.location!.latLng]),
+        // A flowing curve through the records rather than raw straight hops, so
+        // a trip's path reads as one continuous journey. The shape depends on
+        // the chosen [_curveStyle]: a centripetal spline through the points, or
+        // true great-circle arcs between them.
+        points: _curveStyle == _CurveStyle.greatCircle
+            ? _greatCircleCurve(located)
+            : _centripetalCurve(located),
         // A thin dark-grey dashed line for every trip — a quiet route hint that
         // doesn't compete with the records themselves (trips are still told
         // apart by their cluster colour when zoomed out).
@@ -669,27 +697,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 );
               },
             ),
-            // Base-map style switcher (bottom-left) + live attribution.
+            // Map settings button (bottom-left) — opens a dialog gathering the
+            // base-map style, the place-name toggle and the route-line style.
             Positioned(
               left: 16,
               bottom: 16,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  _StyleSwitcher(
-                    styles: _mapStyles,
-                    selected: _styleIndex,
-                    onSelect: (i) => setState(() => _styleIndex = i),
-                  ),
-                  const SizedBox(width: 10),
-                  _LabelToggle(
-                    hidden: _labelsHidden,
-                    enabled: style.labelsUrlTemplate != null,
-                    onTap: () =>
-                        setState(() => _labelsHidden = !_labelsHidden),
-                  ),
-                ],
-              ),
+              child: _MapSettingsButton(onTap: _openSettings),
             ),
             Positioned(
               right: 8,
@@ -969,42 +982,106 @@ Color _tripColor(String tripId) {
   return HSLColor.fromAHSL(1, hue, 0.55, 0.45).toColor();
 }
 
-/// Densifies [pts] into a smooth Catmull-Rom spline so flutter_map draws the
-/// trip path as a flowing curve instead of straight point-to-point segments.
+/// Densifies [pts] into a **centripetal** Catmull-Rom spline (the α=0.5
+/// parameterization) so flutter_map draws the trip path as a flowing curve
+/// instead of straight point-to-point segments.
 ///
-/// The spline passes *through* every original record (unlike a Bézier control
-/// hull), so the line still visibly connects each place; [samples] interpolated
-/// points per span set how smooth each bend is. Two points (or fewer) have no
-/// curvature to add, so they're returned unchanged.
-List<LatLng> _smoothCurve(List<LatLng> pts, {int samples = 18}) {
+/// Unlike the plain *uniform* Catmull-Rom, the knot spacing follows the square
+/// root of each chord length. That removes the overshoot and self-intersecting
+/// loops uniform Catmull-Rom produces when records are unevenly spaced — a tight
+/// cluster of records inside one city sitting next to a long hop to the next,
+/// which is exactly how trips look. The spline still passes *through* every
+/// original record, so the line visibly connects each place; [samples]
+/// interpolated points per span set how smooth each bend is. Two points (or
+/// fewer) have no curvature to add, so they're returned unchanged.
+List<LatLng> _centripetalCurve(List<LatLng> pts, {int samples = 18}) {
   if (pts.length < 3) return pts;
-  final out = <LatLng>[];
-  for (var i = 0; i < pts.length - 1; i++) {
-    // The four points a Catmull-Rom span needs; ends duplicate the extremes so
-    // the curve starts and finishes exactly on the first and last record.
-    final p0 = pts[i == 0 ? 0 : i - 1];
-    final p1 = pts[i];
-    final p2 = pts[i + 1];
-    final p3 = pts[i + 2 < pts.length ? i + 2 : pts.length - 1];
-    for (var s = 0; s < samples; s++) {
-      final t = s / samples;
-      final t2 = t * t;
-      final t3 = t2 * t;
-      // Standard Catmull-Rom basis, applied to each axis independently. Over
-      // the short spans between records, lat/lng behaves flat enough that
-      // interpolating them directly gives a clean on-screen curve.
-      double axis(double a, double b, double c, double d) => 0.5 *
-          ((2 * b) +
-              (c - a) * t +
-              (2 * a - 5 * b + 4 * c - d) * t2 +
-              (3 * b - a - 3 * c + d) * t3);
+  const alpha = 0.5;
+  // Duplicate the extremes so the curve starts/ends exactly on the first/last
+  // record (the end spans have no outer neighbour otherwise).
+  final p = [pts.first, ...pts, pts.last];
+  final out = <LatLng>[pts.first];
+
+  double knot(double t, LatLng a, LatLng b) {
+    final dx = a.latitude - b.latitude, dy = a.longitude - b.longitude;
+    // max() guards against coincident records collapsing a knot interval to
+    // zero (which would divide by zero below).
+    return t + math.pow(math.max(math.sqrt(dx * dx + dy * dy), 1e-9), alpha);
+  }
+
+  for (var i = 1; i < p.length - 2; i++) {
+    final p0 = p[i - 1], p1 = p[i], p2 = p[i + 1], p3 = p[i + 2];
+    const t0 = 0.0;
+    final t1 = knot(t0, p0, p1);
+    final t2 = knot(t1, p1, p2);
+    final t3 = knot(t2, p2, p3);
+    for (var s = 1; s <= samples; s++) {
+      final t = t1 + (t2 - t1) * s / samples;
+      // Barry–Goldman pyramidal evaluation, per axis. Over the short spans
+      // between records lat/lng behaves flat enough to interpolate directly.
+      double axis(double a, double b, double c, double d) {
+        final a1 = (t1 - t) / (t1 - t0) * a + (t - t0) / (t1 - t0) * b;
+        final a2 = (t2 - t) / (t2 - t1) * b + (t - t1) / (t2 - t1) * c;
+        final a3 = (t3 - t) / (t3 - t2) * c + (t - t2) / (t3 - t2) * d;
+        final b1 = (t2 - t) / (t2 - t0) * a1 + (t - t0) / (t2 - t0) * a2;
+        final b2 = (t3 - t) / (t3 - t1) * a2 + (t - t1) / (t3 - t1) * a3;
+        return (t2 - t) / (t2 - t1) * b1 + (t - t1) / (t2 - t1) * b2;
+      }
+
       out.add(LatLng(
         axis(p0.latitude, p1.latitude, p2.latitude, p3.latitude),
         axis(p0.longitude, p1.longitude, p2.longitude, p3.longitude),
       ));
     }
   }
-  out.add(pts.last); // close on the final record (the loops stop just short)
+  return out;
+}
+
+/// Connects [pts] with true **great-circle** arcs — the shortest path over the
+/// globe between consecutive records. On the Web-Mercator map these render as
+/// gently bowed "flight-path" curves rather than straight rhumb lines, which
+/// reads more naturally over the long hops between cities.
+///
+/// Each segment is sampled along the geodesic via spherical linear
+/// interpolation of the endpoints' unit vectors, so it stays correct across the
+/// antimeridian and near the poles (where a lat/lng lerp would not). Very short
+/// or coincident spans collapse to a straight join. Fewer than two points have
+/// nothing to connect.
+List<LatLng> _greatCircleCurve(List<LatLng> pts, {int samples = 24}) {
+  if (pts.length < 2) return pts;
+  const deg2rad = math.pi / 180, rad2deg = 180 / math.pi;
+  final out = <LatLng>[pts.first];
+  for (var i = 0; i < pts.length - 1; i++) {
+    final a = pts[i], b = pts[i + 1];
+    final lat1 = a.latitude * deg2rad, lon1 = a.longitude * deg2rad;
+    final lat2 = b.latitude * deg2rad, lon2 = b.longitude * deg2rad;
+    // Endpoints as unit vectors on the sphere.
+    final x1 = math.cos(lat1) * math.cos(lon1),
+        y1 = math.cos(lat1) * math.sin(lon1),
+        z1 = math.sin(lat1);
+    final x2 = math.cos(lat2) * math.cos(lon2),
+        y2 = math.cos(lat2) * math.sin(lon2),
+        z2 = math.sin(lat2);
+    final omega =
+        math.acos((x1 * x2 + y1 * y2 + z1 * z2).clamp(-1.0, 1.0));
+    if (omega < 1e-6) {
+      out.add(b); // effectively the same point — nothing to interpolate.
+      continue;
+    }
+    final sinOmega = math.sin(omega);
+    for (var s = 1; s <= samples; s++) {
+      final t = s / samples;
+      final k1 = math.sin((1 - t) * omega) / sinOmega;
+      final k2 = math.sin(t * omega) / sinOmega;
+      final x = k1 * x1 + k2 * x2;
+      final y = k1 * y1 + k2 * y2;
+      final z = k1 * z1 + k2 * z2;
+      out.add(LatLng(
+        math.atan2(z, math.sqrt(x * x + y * y)) * rad2deg,
+        math.atan2(y, x) * rad2deg,
+      ));
+    }
+  }
   return out;
 }
 
@@ -1514,140 +1591,191 @@ const _mapStyles = <_MapStyle>[
   ),
 ];
 
-/// The layers button (bottom-left of the map) that expands a list of base-map
-/// styles and switches between them.
-class _StyleSwitcher extends StatefulWidget {
-  final List<_MapStyle> styles;
-  final int selected;
-  final ValueChanged<int> onSelect;
+/// The two mutually-exclusive route-line styles offered in the map settings.
+/// Each carries its own picker label, one-line description and icon.
+enum _CurveStyle {
+  centripetal('向心曲线', '平滑穿过每个记录点，转弯自然、不打结', Icons.gesture),
+  greatCircle('大圆弧', '沿地球最短路径相连，长距离呈现航线弧', Icons.public);
 
-  const _StyleSwitcher({
-    required this.styles,
-    required this.selected,
-    required this.onSelect,
-  });
+  const _CurveStyle(this.label, this.description, this.icon);
 
-  @override
-  State<_StyleSwitcher> createState() => _StyleSwitcherState();
+  final String label;
+  final String description;
+  final IconData icon;
 }
 
-class _StyleSwitcherState extends State<_StyleSwitcher> {
-  bool _open = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_open)
-          Container(
-            width: 132,
-            margin: const EdgeInsets.only(bottom: 10),
-            child: Material(
-              elevation: 4,
-              borderRadius: BorderRadius.circular(12),
-              clipBehavior: Clip.antiAlias,
-              color: theme.colorScheme.surface,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var i = 0; i < widget.styles.length; i++)
-                    InkWell(
-                      onTap: () {
-                        widget.onSelect(i);
-                        setState(() => _open = false);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        child: Row(
-                          children: [
-                            Icon(
-                              i == widget.selected
-                                  ? Icons.radio_button_checked
-                                  : Icons.radio_button_unchecked,
-                              size: 16,
-                              color: i == widget.selected
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(widget.styles[i].label,
-                                style: theme.textTheme.bodyMedium),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        Material(
-          color: theme.colorScheme.surface,
-          elevation: 3,
-          shape: const CircleBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () => setState(() => _open = !_open),
-            child: SizedBox(
-              width: 48,
-              height: 48,
-              child: Icon(Icons.layers_outlined,
-                  color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// The "hide place names" toggle beside the style switcher. Disabled for styles
-/// that bake labels into their tiles (or carry none), which can't be split.
-class _LabelToggle extends StatelessWidget {
-  final bool hidden;
-  final bool enabled;
+/// The map settings button (bottom-left of the map). The style-swatch icon
+/// reads as "map appearance"; tapping it opens the [_MapSettingsDialog].
+class _MapSettingsButton extends StatelessWidget {
   final VoidCallback onTap;
 
-  const _LabelToggle({
-    required this.hidden,
-    required this.enabled,
-    required this.onTap,
-  });
+  const _MapSettingsButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = !enabled
-        ? theme.disabledColor
-        : (hidden
-            ? theme.colorScheme.primary
-            : theme.colorScheme.onSurfaceVariant);
-
     return Tooltip(
-      message: !enabled
-          ? '该底图无法单独隐藏地名'
-          : (hidden ? '显示地名' : '隐藏地名'),
+      message: '地图设置',
       child: Material(
         color: theme.colorScheme.surface,
         elevation: 3,
         shape: const CircleBorder(),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: enabled ? onTap : null,
+          onTap: onTap,
           child: SizedBox(
             width: 48,
             height: 48,
-            child: Icon(
-              hidden ? Icons.label_off_outlined : Icons.label_outline,
-              color: color,
-            ),
+            child: Icon(Icons.style_outlined,
+                color: theme.colorScheme.onSurfaceVariant),
           ),
         ),
       ),
     );
   }
+}
+
+/// The map settings popup: base-map style, the place-name toggle and the
+/// route-line style, gathered in one dialog. It keeps a local copy of each
+/// value so its own controls rebuild instantly, and forwards every change
+/// straight through the callbacks so the map behind it updates live.
+class _MapSettingsDialog extends StatefulWidget {
+  final List<_MapStyle> styles;
+  final int styleIndex;
+  final bool labelsHidden;
+  final _CurveStyle curveStyle;
+  final ValueChanged<int> onStyle;
+  final ValueChanged<bool> onLabels;
+  final ValueChanged<_CurveStyle> onCurve;
+
+  const _MapSettingsDialog({
+    required this.styles,
+    required this.styleIndex,
+    required this.labelsHidden,
+    required this.curveStyle,
+    required this.onStyle,
+    required this.onLabels,
+    required this.onCurve,
+  });
+
+  @override
+  State<_MapSettingsDialog> createState() => _MapSettingsDialogState();
+}
+
+class _MapSettingsDialogState extends State<_MapSettingsDialog> {
+  late int _styleIndex = widget.styleIndex;
+  late bool _labelsHidden = widget.labelsHidden;
+  late _CurveStyle _curve = widget.curveStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Only the CARTO family ships a separate labels overlay that can be hidden;
+    // baked-label styles disable the toggle.
+    final labelsAvailable =
+        widget.styles[_styleIndex].labelsUrlTemplate != null;
+
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 12, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.style_outlined, color: theme.colorScheme.primary),
+                  const SizedBox(width: 10),
+                  Text('地图设置', style: theme.textTheme.titleLarge),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionLabel(theme, '底图样式'),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (var i = 0; i < widget.styles.length; i++)
+                          ChoiceChip(
+                            label: Text(widget.styles[i].label),
+                            selected: i == _styleIndex,
+                            onSelected: (_) {
+                              setState(() => _styleIndex = i);
+                              widget.onStyle(i);
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('隐藏地名'),
+                      subtitle: Text(labelsAvailable
+                          ? '不显示底图上的地名标注'
+                          : '该底图无法单独隐藏地名'),
+                      value: labelsAvailable && _labelsHidden,
+                      onChanged: labelsAvailable
+                          ? (v) {
+                              setState(() => _labelsHidden = v);
+                              widget.onLabels(v);
+                            }
+                          : null,
+                    ),
+                    const Divider(height: 28),
+                    _sectionLabel(theme, '连线样式'),
+                    const SizedBox(height: 10),
+                    SegmentedButton<_CurveStyle>(
+                      showSelectedIcon: false,
+                      segments: [
+                        for (final c in _CurveStyle.values)
+                          ButtonSegment<_CurveStyle>(
+                            value: c,
+                            label: Text(c.label),
+                            icon: Icon(c.icon),
+                          ),
+                      ],
+                      selected: {_curve},
+                      onSelectionChanged: (selection) {
+                        setState(() => _curve = selection.first);
+                        widget.onCurve(selection.first);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _curve.description,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionLabel(ThemeData theme, String text) => Text(
+        text,
+        style: theme.textTheme.labelLarge?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          letterSpacing: 0.4,
+        ),
+      );
 }
