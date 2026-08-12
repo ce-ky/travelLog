@@ -12,7 +12,12 @@ import 'trip_detail_screen.dart';
 /// clicking a trip on the left shows only that trip's records on the right, in
 /// place. On a phone, tapping a trip opens its records full-screen instead.
 class TripsScreen extends StatefulWidget {
-  const TripsScreen({super.key});
+  /// When set (the desktop 旅途 panel), tapping a trip reports it instead of
+  /// opening a full-screen detail page — the caller opens the trip's records as
+  /// a floating panel over the map. Left null in the phone/full-page layout.
+  final void Function(String tripId)? onTripSelected;
+
+  const TripsScreen({super.key, this.onTripSelected});
 
   @override
   State<TripsScreen> createState() => _TripsScreenState();
@@ -85,6 +90,12 @@ class _TripsScreenState extends State<TripsScreen> {
   }
 
   void _openTrip(Trip trip, bool wide) {
+    // Desktop 旅途 panel: hand the trip up so its records open as a floating
+    // panel over the map (and record taps zoom the map), rather than a page.
+    if (widget.onTripSelected != null) {
+      widget.onTripSelected!(trip.id);
+      return;
+    }
     if (wide) {
       setState(() => _selectedTripId = trip.id);
       return;

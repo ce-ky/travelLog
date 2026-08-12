@@ -43,11 +43,21 @@ class _HomeShellState extends State<HomeShell> {
   /// Below this width we treat the window as a phone.
   static const _desktopBreakpoint = 720.0;
 
+  /// Desktop channel: lets the 旅途 panel open a trip on the map (as a floating
+  /// records panel) instead of a full-screen page.
+  final MapCommands _mapCommands = MapCommands();
+
   late final _screens = [
-    MapScreen(tileProvider: widget.mapTileProvider),
+    MapScreen(tileProvider: widget.mapTileProvider, commands: _mapCommands),
     const TripsScreen(),
     const BrowseScreen(),
   ];
+
+  @override
+  void dispose() {
+    _mapCommands.dispose();
+    super.dispose();
+  }
 
   void _select(int i) => setState(() => _index = i);
 
@@ -113,7 +123,7 @@ class _HomeShellState extends State<HomeShell> {
                 title: _panel == _Panel.trips ? '旅途' : '浏览',
                 onClose: () => setState(() => _panel = _Panel.none),
                 child: _panel == _Panel.trips
-                    ? const TripsScreen()
+                    ? TripsScreen(onTripSelected: _openTripOnMap)
                     : const BrowseScreen(),
               ),
             ),
@@ -124,6 +134,14 @@ class _HomeShellState extends State<HomeShell> {
 
   void _togglePanel(_Panel p) =>
       setState(() => _panel = _panel == p ? _Panel.none : p);
+
+  /// A trip picked in the 旅途 panel: open its records as a floating panel over
+  /// the map (record taps then zoom the map), and close the nav panel so the
+  /// map — and that floating records card — are in view.
+  void _openTripOnMap(String tripId) {
+    _mapCommands.openTrip(tripId);
+    setState(() => _panel = _Panel.none);
+  }
 
   // ---- Phone: app bar + bottom navigation (unchanged) ----------------------
 
@@ -277,7 +295,13 @@ class _SidePanel extends StatelessWidget {
               ],
             ),
           ),
-          const Divider(height: 1),
+          // A faint hairline, matching the map's floating records panel, so the
+          // header reads as part of one clean surface rather than a boxed section.
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: theme.dividerColor.withValues(alpha: 0.4),
+          ),
           Expanded(child: child),
         ],
       ),
