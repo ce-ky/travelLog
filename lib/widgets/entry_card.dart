@@ -19,7 +19,16 @@ class EntryCard extends StatelessWidget {
   /// Left null in the plain list views, where a card isn't itself tappable.
   final VoidCallback? onTap;
 
-  const EntryCard({super.key, required this.entry, this.onTap});
+  /// Highlights the card as the one currently expanded on the map — mirrors the
+  /// map selection into the floating records list so the two stay in sync.
+  final bool selected;
+
+  const EntryCard({
+    super.key,
+    required this.entry,
+    this.onTap,
+    this.selected = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +40,15 @@ class EntryCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      // The selected record picks up the same tinted container the selected
+      // trip card uses, plus a primary outline, so it clearly reads as active.
+      color: selected ? theme.colorScheme.secondaryContainer : null,
+      shape: selected
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+            )
+          : null,
       child: InkWell(
         // A null onTap leaves the card inert (no ripple) — the same look the
         // list views had before; only the map panel passes a handler.

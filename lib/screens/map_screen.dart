@@ -737,10 +737,16 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
             clipBehavior: Clip.antiAlias,
-            child: TripRecordsPanel(
-              tripId: _panelTripId!,
-              onClose: () => setState(() => _panelTripId = null),
-              onRecordTap: _selectEntry,
+            // Rebuild only the panel (not the map) when the map selection
+            // changes, so the expanded record shows highlighted in the list.
+            child: ValueListenableBuilder<Entry?>(
+              valueListenable: _selectedN,
+              builder: (context, selected, _) => TripRecordsPanel(
+                tripId: _panelTripId!,
+                onClose: () => setState(() => _panelTripId = null),
+                onRecordTap: _selectEntry,
+                selectedEntryId: selected?.id,
+              ),
             ),
           ),
         ),

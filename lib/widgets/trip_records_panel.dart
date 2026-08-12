@@ -20,11 +20,16 @@ class TripRecordsPanel extends StatelessWidget {
   /// When provided, tapping a record reports it (the map zooms to its location).
   final void Function(Entry entry)? onRecordTap;
 
+  /// The id of the record currently expanded on the map, if any — highlighted
+  /// in the list so the panel mirrors the map's selection.
+  final String? selectedEntryId;
+
   const TripRecordsPanel({
     super.key,
     required this.tripId,
     this.onClose,
     this.onRecordTap,
+    this.selectedEntryId,
   });
 
   @override
@@ -78,7 +83,11 @@ class TripRecordsPanel extends StatelessWidget {
         Expanded(
           child: entries.isEmpty
               ? _centeredHint(theme, Icons.notes_outlined, '这趟旅途还没有记录')
-              : EntryGroupedList(entries: entries, onEntryTap: onRecordTap),
+              : EntryGroupedList(
+                  entries: entries,
+                  onEntryTap: onRecordTap,
+                  selectedEntryId: selectedEntryId,
+                ),
         ),
       ],
     );

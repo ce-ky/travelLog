@@ -14,11 +14,16 @@ class EntryGroupedList extends StatelessWidget {
   /// map's records panel to zoom the map to that record).
   final void Function(Entry entry)? onEntryTap;
 
+  /// The id of the record currently expanded on the map, if any — that card is
+  /// shown highlighted so the list tracks the map's selection.
+  final String? selectedEntryId;
+
   const EntryGroupedList({
     super.key,
     required this.entries,
     this.padding = const EdgeInsets.only(bottom: 12),
     this.onEntryTap,
+    this.selectedEntryId,
   });
 
   @override
@@ -40,6 +45,7 @@ class EntryGroupedList extends StatelessWidget {
       children.addAll(items.map((e) => EntryCard(
             entry: e,
             onTap: onEntryTap == null ? null : () => onEntryTap!(e),
+            selected: e.id == selectedEntryId,
           )));
     });
 
