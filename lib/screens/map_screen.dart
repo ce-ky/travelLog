@@ -682,23 +682,30 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       },
     );
 
-    // Wide window with a trip selected: the map shares the row with a right-hand
-    // records panel. Otherwise the map fills the view on its own.
+    // Wide window with a trip selected: the map keeps the whole window and the
+    // trip's records float over it as a rounded card on the right — no docked
+    // pane or divider line. Tapping a record zooms the map to its location.
+    // Otherwise the map fills the view on its own.
     final wide = MediaQuery.sizeOf(context).width >= _panelBreakpoint;
     if (!wide || _panelTripId == null) return map;
 
-    final theme = Theme.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Stack(
       children: [
-        Expanded(child: map),
-        VerticalDivider(width: 1, color: theme.dividerColor),
-        SizedBox(
+        Positioned.fill(child: map),
+        Positioned(
+          top: 20,
+          right: 20,
+          bottom: 20,
           width: 360,
           child: Material(
+            elevation: 6,
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            clipBehavior: Clip.antiAlias,
             child: TripRecordsPanel(
               tripId: _panelTripId!,
               onClose: () => setState(() => _panelTripId = null),
+              onRecordTap: _selectEntry,
             ),
           ),
         ),

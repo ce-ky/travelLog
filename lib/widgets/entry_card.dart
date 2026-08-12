@@ -14,7 +14,12 @@ import 'entry_image.dart';
 /// Reused by every list view.
 class EntryCard extends StatelessWidget {
   final Entry entry;
-  const EntryCard({super.key, required this.entry});
+
+  /// When set, tapping the card runs this (e.g. the map zooms to the record).
+  /// Left null in the plain list views, where a card isn't itself tappable.
+  final VoidCallback? onTap;
+
+  const EntryCard({super.key, required this.entry, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -26,49 +31,56 @@ class EntryCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (entry.hasImage) ...[
-              _ImageStrip(paths: entry.imagePaths, glyph: entry.markerGlyph),
-              const SizedBox(height: 10),
-            ],
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Title is optional — only shown when the user set one.
-                      if (title != null) ...[
-                        Text(title,
-                            style: theme.textTheme.titleMedium,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis),
-                        const SizedBox(height: 4),
-                      ],
-                      if (entry.body.isNotEmpty)
-                        Text(entry.body,
-                            maxLines: 4, overflow: TextOverflow.ellipsis),
-                      // With neither title nor body, keep the type as a heading
-                      // so the row never reads as empty.
-                      if (title == null && entry.body.isEmpty)
-                        Text(entry.type.label,
-                            style: theme.textTheme.titleMedium),
-                      const SizedBox(height: 8),
-                      _MetaRow(entry: entry, trip: trip, dateStr: dateStr),
-                    ],
-                  ),
-                ),
-                _DeleteButton(
-                  onConfirm: () => context.read<AppState>().removeEntry(entry.id),
-                ),
+      child: InkWell(
+        // A null onTap leaves the card inert (no ripple) — the same look the
+        // list views had before; only the map panel passes a handler.
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (entry.hasImage) ...[
+                _ImageStrip(paths: entry.imagePaths, glyph: entry.markerGlyph),
+                const SizedBox(height: 10),
               ],
-            ),
-          ],
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Title is optional — only shown when the user set one.
+                        if (title != null) ...[
+                          Text(title,
+                              style: theme.textTheme.titleMedium,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 4),
+                        ],
+                        if (entry.body.isNotEmpty)
+                          Text(entry.body,
+                              maxLines: 4, overflow: TextOverflow.ellipsis),
+                        // With neither title nor body, keep the type as a heading
+                        // so the row never reads as empty.
+                        if (title == null && entry.body.isEmpty)
+                          Text(entry.type.label,
+                              style: theme.textTheme.titleMedium),
+                        const SizedBox(height: 8),
+                        _MetaRow(entry: entry, trip: trip, dateStr: dateStr),
+                      ],
+                    ),
+                  ),
+                  _DeleteButton(
+                    onConfirm: () =>
+                        context.read<AppState>().removeEntry(entry.id),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
