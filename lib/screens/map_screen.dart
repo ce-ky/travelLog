@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -331,15 +332,27 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   static const double _panelBreakpoint = 720;
 
   /// Current map zoom, tracked so markers can collapse into per-trip clusters
-  /// when zoomed out. Below [_recordZoom] shows trips; at/above it, records.
+  /// when zoomed out. There are three bands, from zoomed-out to zoomed-in:
+  ///   • below [_recordZoom]            → per-trip cluster bubbles
+  ///   • [_recordZoom, _pinZoom)        → small dots (records may still overlap
+  ///                                       at this scale, so a full teardrop pin
+  ///                                       each would collide — a tidy dot reads
+  ///                                       cleaner)
+  ///   • at/above [_pinZoom]            → full teardrop record pins
   double _zoom = 5;
   static const double _recordZoom = 9;
+  static const double _pinZoom = 13;
 
   /// Street-level zoom. Below this, a map tap zooms in rather than placing a
   /// record — so records are only added when the location is precise.
   static const double _addZoom = 15;
 
+  /// Zoomed out far enough to show per-trip cluster bubbles instead of records.
   bool get _collapsed => _zoom < _recordZoom;
+
+  /// The middle band: records are shown, but as small dots rather than teardrop
+  /// pins because at this scale the pins would overlap one another.
+  bool get _dots => !_collapsed && _zoom < _pinZoom;
 
   /// Tapping empty map space opens the new-entry form as a popup anchored at
   /// that point (the location is pre-filled into the form).
@@ -560,8 +573,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 // Track zoom (to collapse/expand markers) and keep any open
                 // popup pinned to its point while the map moves.
                 onPositionChanged: (camera, __) {
+                  // Rebuild when the zoom crosses either band boundary — the
+                  // cluster↔record line ([_recordZoom]) or the dot↔pin line
+                  // ([_pinZoom]) — since each changes what the markers render as.
                   final crossed =
-                      (camera.zoom < _recordZoom) != (_zoom < _recordZoom);
+                      (camera.zoom < _recordZoom) != (_zoom < _recordZoom) ||
+                          (camera.zoom < _pinZoom) != (_zoom < _pinZoom);
                   _zoom = camera.zoom;
                   // The hover hint is only valid at add zoom; drop it otherwise.
                   if (_zoom < _addZoom) _hover.value = null;
@@ -617,6 +634,23 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                               color: _tripColor(group.key),
                               onTap: () => _openTripPanel(group.key,
                                   [for (final e in group.value) e.location!.latLng]),
+                            ),
+                          ),
+                        )
+                    else if (_dots)
+                      // Middle band: individual records, but as small dots so
+                      // near-neighbours don't collide the way full teardrop pins
+                      // would at this scale. Tapping one zooms in (via
+                      // [_selectEntry]) to its full pin and expanded bubble.
+                      for (final e in entries)
+                        Marker(
+                          point: e.location!.latLng,
+                          width: 18,
+                          height: 18,
+                          // The dot sits centred right on the point.
+                          child: _HoverBounce(
+                            child: _EntryDot(
+                              onTap: () => _selectEntry(e),
                             ),
                           ),
                         )
@@ -703,6 +737,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               left: 16,
               bottom: 16,
               child: _MapSettingsButton(onTap: _openSettings),
+            ),
+            // Scale bar, tucked in just above the settings button in the
+            // bottom-left corner. It reads the live camera off the controller,
+            // so it re-labels itself as the map is panned and zoomed.
+            Positioned(
+              left: 16,
+              bottom: 72,
+              child: _ScaleBar(controller: _map),
             ),
             Positioned(
               right: 8,
@@ -1241,6 +1283,37 @@ class _TeardropPainter extends CustomPainter {
       old.fill != fill || old.border != border;
 }
 
+/// A small record dot, shown in the middle zoom band where full teardrop pins
+/// would overlap. Same quiet material as the pins — a translucent-white fill
+/// with a hairline grey rim — just reduced to a tidy circle centred on the
+/// record's point. Tapping it selects the record (which zooms in to its pin).
+class _EntryDot extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _EntryDot({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      // RepaintBoundary for the same reason the teardrop uses one: cache each
+      // dot as its own layer so a pan/zoom just re-composites textures instead
+      // of re-painting every visible dot per frame.
+      child: RepaintBoundary(
+        child: Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.75),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.grey.shade400, width: 1.4),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The selected entry's bubble, expanded in place to show its content. Uses the
 /// same tail-at-the-bottom shape, so it still points at the location.
 class _ExpandedBubble extends StatelessWidget {
@@ -1604,6 +1677,134 @@ enum _CurveStyle {
   final String label;
   final String description;
   final IconData icon;
+}
+
+/// A map scale bar: a short rule labelled with the ground distance it spans at
+/// the current zoom and latitude. It listens to the controller's event stream
+/// so it re-labels itself as the map pans/zooms, without rebuilding the map.
+///
+/// Placed as an overlay (not a map child) so it can be positioned freely in the
+/// bottom-left corner. The frosted-white chip matches the map's other on-map
+/// labels and keeps the rule legible over any base map (satellite/dark included).
+class _ScaleBar extends StatefulWidget {
+  final MapController controller;
+
+  const _ScaleBar({required this.controller});
+
+  @override
+  State<_ScaleBar> createState() => _ScaleBarState();
+}
+
+class _ScaleBarState extends State<_ScaleBar> {
+  StreamSubscription<MapEvent>? _sub;
+
+  /// The widest the bar is allowed to grow; the labelled distance is the largest
+  /// "nice" round value (1/2/5 × 10ⁿ metres) whose length fits inside this.
+  static const double _maxWidth = 96;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = widget.controller.mapEventStream.listen((_) {
+      if (mounted) setState(() {});
+    });
+    // The first camera may only exist after layout; repaint once it does.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  /// Ground metres one screen pixel covers at [zoom] and [lat], for Web
+  /// Mercator with 256 px tiles (the projection flutter_map draws in).
+  double _metresPerPixel(double lat, double zoom) =>
+      156543.03392804097 *
+      math.cos(lat * math.pi / 180).abs() /
+      math.pow(2, zoom);
+
+  /// Largest 1/2/5 × 10ⁿ value not exceeding [max] — the "round" distances a
+  /// scale bar labels itself with.
+  double _niceDistance(double max) {
+    if (max <= 0) return 1;
+    final pow10 = math.pow(10, (math.log(max) / math.ln10).floor()).toDouble();
+    final f = max / pow10;
+    final nice = f >= 5
+        ? 5.0
+        : f >= 2
+            ? 2.0
+            : 1.0;
+    return nice * pow10;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // The camera getter throws before the map is laid out; on that first frame
+    // just draw nothing (the post-frame callback re-runs us once it's ready).
+    final MapCamera camera;
+    try {
+      camera = widget.controller.camera;
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
+
+    final mpp = _metresPerPixel(camera.center.latitude, camera.zoom);
+    if (!mpp.isFinite || mpp <= 0) return const SizedBox.shrink();
+
+    final metres = _niceDistance(mpp * _maxWidth);
+    final barWidth = metres / mpp;
+    final label = metres >= 1000
+        ? '${(metres / 1000).toStringAsFixed(0)} 公里'
+        : '${metres.toStringAsFixed(0)} 米';
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style: const TextStyle(fontSize: 10, color: Colors.black87)),
+            const SizedBox(height: 2),
+            SizedBox(
+              width: barWidth,
+              height: 6,
+              child: CustomPaint(painter: _ScaleBarPainter()),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Draws the scale bar's rule: a baseline with a short upward tick at each end
+/// (a ⊔ shape), spanning the full given width.
+class _ScaleBarPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black87
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.square;
+    final y = size.height;
+    // Baseline plus end ticks rising from it.
+    canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    canvas.drawLine(Offset(0, y), const Offset(0, 0), paint);
+    canvas.drawLine(Offset(size.width, y), Offset(size.width, 0), paint);
+  }
+
+  @override
+  bool shouldRepaint(_ScaleBarPainter oldDelegate) => false;
 }
 
 /// The map settings button (bottom-left of the map). The style-swatch icon
