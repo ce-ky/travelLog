@@ -58,8 +58,9 @@ Screens ──> AppState (ChangeNotifier) ──> TravelRepository (interface)
 - **Map (`map_screen.dart`)** collapses markers into per-trip **clusters** when
   zoomed out (below `_recordZoom`) and shows individual records when zoomed in.
   Tapping empty space at street zoom (`_addZoom`) starts a new record there;
-  below that, a tap just zooms in. Record pins are a uniform translucent-white
-  teardrop; trips are connected by a thin grey dashed route line and told apart
+  below that, a tap just zooms in. Record pins are a uniform amber teardrop (and
+  collapse to small amber dots at the mid-zoom band where full pins would
+  overlap); trips are connected by a thin grey dashed route line and told apart
   by their cluster colour when zoomed out.
 - **Auto-trip assignment (`entry_form.dart`)** — a new record with a location
   auto-selects the trip whose nearest existing record is within

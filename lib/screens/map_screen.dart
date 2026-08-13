@@ -744,7 +744,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             Positioned(
               left: 16,
               bottom: 72,
-              child: _ScaleBar(controller: _map),
+              child: _ScaleBar(controller: _map, dark: style.dark),
             ),
             Positioned(
               right: 8,
@@ -1018,6 +1018,12 @@ class _PulsePainter extends CustomPainter {
       old.progress != progress || old.color != color;
 }
 
+/// The warm amber every record marker shares — the teardrop pins and the small
+/// dots alike — so records read as one consistent colour, set apart from the
+/// per-trip cluster hues. [_recordStroke] is a deeper orange for the rim.
+const Color _recordFill = Color(0xFFFFA726); // amber-orange (orange 400)
+const Color _recordStroke = Color(0xFFEF6C00); // deeper orange (orange 800)
+
 /// A stable colour per trip, so each trip's connecting line is distinguishable.
 Color _tripColor(String tripId) {
   final hue = (tripId.hashCode % 360).abs().toDouble();
@@ -1215,10 +1221,10 @@ class _EntryMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // One shared look for all pins: a semi-transparent white fill (the map
-    // shows faintly through) with a hairline grey rim to hold its edge.
-    final fill = Colors.white.withValues(alpha: 0.7);
-    final border = Colors.grey.shade400;
+    // One shared look for all pins: a solid amber fill with a deeper-orange
+    // hairline rim to hold its edge against the map.
+    const fill = _recordFill;
+    const border = _recordStroke;
 
     return GestureDetector(
       onTap: onTap,
@@ -1284,9 +1290,9 @@ class _TeardropPainter extends CustomPainter {
 }
 
 /// A small record dot, shown in the middle zoom band where full teardrop pins
-/// would overlap. Same quiet material as the pins — a translucent-white fill
-/// with a hairline grey rim — just reduced to a tidy circle centred on the
-/// record's point. Tapping it selects the record (which zooms in to its pin).
+/// would overlap. Same amber material as the pins — an amber fill with a
+/// deeper-orange rim — just reduced to a tidy circle centred on the record's
+/// point. Tapping it selects the record (which zooms in to its pin).
 class _EntryDot extends StatelessWidget {
   final VoidCallback onTap;
 
@@ -1304,9 +1310,9 @@ class _EntryDot extends StatelessWidget {
           width: 12,
           height: 12,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.75),
+            color: _recordFill,
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.grey.shade400, width: 1.4),
+            border: Border.all(color: _recordStroke, width: 1.4),
           ),
         ),
       ),
@@ -1593,6 +1599,11 @@ class _MapStyle {
   final int maxNativeZoom;
   final String attribution;
 
+  /// Whether this base map's tiles read as predominantly dark, so overlays that
+  /// auto-contrast against it (the scale bar) know to switch to light ink. Set
+  /// on the dark and satellite styles; the rest are light.
+  final bool dark;
+
   const _MapStyle({
     required this.label,
     required this.urlTemplate,
@@ -1600,6 +1611,7 @@ class _MapStyle {
     this.subdomains = const [],
     this.maxNativeZoom = 19,
     required this.attribution,
+    this.dark = false,
   });
 }
 
@@ -1631,6 +1643,7 @@ const _mapStyles = <_MapStyle>[
     subdomains: ['a', 'b', 'c', 'd'],
     maxNativeZoom: 20,
     attribution: '© OpenStreetMap contributors © CARTO',
+    dark: true,
   ),
   _MapStyle(
     label: '彩色',
@@ -1648,6 +1661,7 @@ const _mapStyles = <_MapStyle>[
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     maxNativeZoom: 19,
     attribution: 'Tiles © Esri, Maxar, Earthstar Geographics',
+    dark: true,
   ),
   _MapStyle(
     label: '地形',
@@ -1684,12 +1698,17 @@ enum _CurveStyle {
 /// so it re-labels itself as the map pans/zooms, without rebuilding the map.
 ///
 /// Placed as an overlay (not a map child) so it can be positioned freely in the
-/// bottom-left corner. The frosted-white chip matches the map's other on-map
-/// labels and keeps the rule legible over any base map (satellite/dark included).
+/// bottom-left corner. Rather than sit on a backing card, it draws directly on
+/// the map: [dark] (the current base map's brightness) chooses light ink over
+/// dark tiles and near-black ink over light ones, and each glyph carries a soft
+/// halo of the opposite tone so the bar stays legible over busy/mid areas too.
 class _ScaleBar extends StatefulWidget {
   final MapController controller;
 
-  const _ScaleBar({required this.controller});
+  /// Whether the base map behind the bar reads as dark — drives the ink colour.
+  final bool dark;
+
+  const _ScaleBar({required this.controller, required this.dark});
 
   @override
   State<_ScaleBar> createState() => _ScaleBarState();
@@ -1761,50 +1780,64 @@ class _ScaleBarState extends State<_ScaleBar> {
         ? '${(metres / 1000).toStringAsFixed(0)} 公里'
         : '${metres.toStringAsFixed(0)} 米';
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: const TextStyle(fontSize: 10, color: Colors.black87)),
-            const SizedBox(height: 2),
-            SizedBox(
-              width: barWidth,
-              height: 6,
-              child: CustomPaint(painter: _ScaleBarPainter()),
-            ),
-          ],
+    // Auto-contrasting ink + an opposite-tone halo, so the bar stands on its own
+    // over the map with no backing card.
+    final ink = widget.dark ? Colors.white : Colors.black87;
+    final halo = widget.dark ? Colors.black54 : Colors.white;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              color: ink,
+              shadows: [Shadow(color: halo, blurRadius: 2)],
+            )),
+        const SizedBox(height: 2),
+        SizedBox(
+          width: barWidth,
+          height: 6,
+          child: CustomPaint(painter: _ScaleBarPainter(ink: ink, halo: halo)),
         ),
-      ),
+      ],
     );
   }
 }
 
 /// Draws the scale bar's rule: a baseline with a short upward tick at each end
-/// (a ⊔ shape), spanning the full given width.
+/// (a ⊔ shape), spanning the full given width. A slightly thicker [halo] pass
+/// paints first as an outline, then the [ink] rule on top, so the shape reads
+/// against any base map without a backing card.
 class _ScaleBarPainter extends CustomPainter {
+  final Color ink;
+  final Color halo;
+
+  _ScaleBarPainter({required this.ink, required this.halo});
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.black87
-      ..strokeWidth = 1.6
-      ..strokeCap = StrokeCap.square;
     final y = size.height;
-    // Baseline plus end ticks rising from it.
-    canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    canvas.drawLine(Offset(0, y), const Offset(0, 0), paint);
-    canvas.drawLine(Offset(size.width, y), Offset(size.width, 0), paint);
+    void rule(Paint p) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
+      canvas.drawLine(Offset(0, y), const Offset(0, 0), p);
+      canvas.drawLine(Offset(size.width, y), Offset(size.width, 0), p);
+    }
+
+    rule(Paint()
+      ..color = halo
+      ..strokeWidth = 3.2
+      ..strokeCap = StrokeCap.round);
+    rule(Paint()
+      ..color = ink
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.square);
   }
 
   @override
-  bool shouldRepaint(_ScaleBarPainter oldDelegate) => false;
+  bool shouldRepaint(_ScaleBarPainter old) => old.ink != ink || old.halo != halo;
 }
 
 /// The map settings button (bottom-left of the map). The style-swatch icon
