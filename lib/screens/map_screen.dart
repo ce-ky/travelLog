@@ -354,6 +354,22 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// pins because at this scale the pins would overlap one another.
   bool get _dots => !_collapsed && _zoom < _pinZoom;
 
+  /// The zoom the route line's width was last computed at, so a smooth zoom only
+  /// rebuilds the map in small steps (not every frame) as the line thickens.
+  double _strokeZoom = 5;
+
+  /// Resting route-line width, at the zoom where records first appear.
+  static const double _baseStroke = 1.5;
+
+  /// Route-line width for [zoom]: the hairline [_baseStroke] where records first
+  /// show ([_recordZoom]), thickening smoothly to ~3× by street level
+  /// ([_addZoom]) so the path reads clearly up close. Linear and clamped, so the
+  /// change eases in without ever jumping.
+  double _routeStroke(double zoom) {
+    final t = ((zoom - _recordZoom) / (_addZoom - _recordZoom)).clamp(0.0, 1.0);
+    return _baseStroke * (1 + 2 * t); // 1× → 3×
+  }
+
   /// Tapping empty map space opens the new-entry form as a popup anchored at
   /// that point (the location is pre-filled into the form).
   Future<void> _startAddAt(LatLng point) async {
@@ -501,7 +517,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         // doesn't compete with the records themselves (trips are still told
         // apart by their cluster colour when zoomed out).
         color: Colors.grey.shade700,
-        strokeWidth: 1.5,
+        // Thickens smoothly with zoom (to ~3× by street level) so the route
+        // grows more prominent as you close in on it.
+        strokeWidth: _routeStroke(_zoom),
         pattern: StrokePattern.dashed(segments: const [7, 6]),
       ));
     });
@@ -579,6 +597,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   final crossed =
                       (camera.zoom < _recordZoom) != (_zoom < _recordZoom) ||
                           (camera.zoom < _pinZoom) != (_zoom < _pinZoom);
+                  // Grow the route line smoothly with zoom: rebuild once the zoom
+                  // has moved a small step since the width was last computed, but
+                  // only while the line is on screen and still within the band it
+                  // thickens over (clamped, so there's nothing to do once past
+                  // street level). Small steps keep the change smooth without a
+                  // per-frame rebuild.
+                  final effZoom =
+                      camera.zoom.clamp(_recordZoom, _addZoom).toDouble();
+                  final lastEff =
+                      _strokeZoom.clamp(_recordZoom, _addZoom).toDouble();
+                  final grew = camera.zoom >= _recordZoom &&
+                      (effZoom - lastEff).abs() >= 0.2;
                   _zoom = camera.zoom;
                   // The hover hint is only valid at add zoom; drop it otherwise.
                   if (_zoom < _addZoom) _hover.value = null;
@@ -588,8 +618,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   // for it every frame just makes panning heavier (and turns the
                   // first-run shader/texture compile into a visible stutter). The
                   // add-entry popup, by contrast, is a Positioned outside the map
-                  // and does need per-frame repositioning.
-                  if (crossed || _addingPoint != null) {
+                  // and does need per-frame repositioning. A zoom step that
+                  // thickens the route line ([grew]) is the one extra trigger —
+                  // it fires on zoom only, so panning stays cheap.
+                  if (crossed || grew || _addingPoint != null) {
+                    if (grew) _strokeZoom = camera.zoom;
                     setState(() {});
                   }
                 },
