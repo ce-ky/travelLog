@@ -1,10 +1,13 @@
 name: Supabase keep-alive
 
-# Free-tier Supabase projects pause after ~7 days idle. A daily API ping keeps
+# Free-tier Supabase projects pause after ~7 days idle. A periodic API ping keeps
 # the inactivity timer reset — from the cloud, so it doesn't need any machine on.
 on:
   schedule:
-    - cron: "30 4 * * *" # daily at 04:30 UTC
+    # Every 3 days at 04:30 UTC. day-of-month */3 fires on the 1st, 4th, 7th …
+    # 28th, 31st, then resets on the 1st — the longest gap (28th → 1st, ~4 days)
+    # still stays well under Supabase's ~7-day idle-pause window.
+    - cron: "30 4 */3 * *"
   workflow_dispatch: # allow a manual run from the Actions tab
 
 jobs:
