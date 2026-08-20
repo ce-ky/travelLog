@@ -659,7 +659,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           width: 168,
                           height: 50,
                           alignment: Alignment.topCenter,
-                          child: _HoverBounce(
+                          child: _HoverScale(
                             alignment: Alignment.bottomCenter,
                             child: _TripCluster(
                               title: appState.tripById(group.key).title,
@@ -681,7 +681,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           width: 18,
                           height: 18,
                           // The dot sits centred right on the point.
-                          child: _HoverBounce(
+                          child: _HoverScale(
                             child: _EntryDot(
                               onTap: () => _selectEntry(e),
                             ),
@@ -698,7 +698,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           height: 40,
                           // Bottom-centre (the teardrop tip) sits on the point.
                           alignment: Alignment.topCenter,
-                          child: _HoverBounce(
+                          child: _HoverScale(
                             alignment: Alignment.bottomCenter,
                             child: _EntryMarker(
                               onTap: () => _selectEntry(e),
@@ -918,46 +918,41 @@ class _AddHint extends StatelessWidget {
   }
 }
 
-/// Wraps a map bubble so that moving the mouse onto it plays a lively "pop":
-/// the bubble swells and springs back to its resting size. [alignment] is the
-/// fixed anchor the scale grows from — bottom-centre for teardrop/tailed
+/// Wraps a map bubble so that moving the mouse onto it swells it up and *holds*
+/// it enlarged for as long as the cursor stays over it; on exit it plays the
+/// same animation in reverse, easing back to its resting size. [alignment] is
+/// the fixed anchor the scale grows from — bottom-centre for teardrop/tailed
 /// bubbles, so their tip stays pinned to the map point during the animation.
-class _HoverBounce extends StatefulWidget {
+class _HoverScale extends StatefulWidget {
   final Widget child;
   final Alignment alignment;
 
-  const _HoverBounce({
+  const _HoverScale({
     required this.child,
     this.alignment = Alignment.center,
   });
 
   @override
-  State<_HoverBounce> createState() => _HoverBounceState();
+  State<_HoverScale> createState() => _HoverScaleState();
 }
 
-class _HoverBounceState extends State<_HoverBounce>
+class _HoverScaleState extends State<_HoverScale>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 480),
+    duration: const Duration(milliseconds: 220),
   );
 
-  // Grow quickly, then spring back past the resting size and settle — the
-  // elastic tail is what gives it the playful bounce.
-  late final Animation<double> _scale = TweenSequence<double>([
-    TweenSequenceItem(
-      tween: Tween(begin: 1.0, end: 1.22).chain(
-        CurveTween(curve: Curves.easeOut),
-      ),
-      weight: 35,
+  // Grow with a slight overshoot on the way up (the little pop), then settle at
+  // the enlarged size and stay there. Reversing (on mouse exit) eases straight
+  // back down without the overshoot.
+  late final Animation<double> _scale = Tween(begin: 1.0, end: 1.18).animate(
+    CurvedAnimation(
+      parent: _c,
+      curve: Curves.easeOutBack,
+      reverseCurve: Curves.easeOut,
     ),
-    TweenSequenceItem(
-      tween: Tween(begin: 1.22, end: 1.0).chain(
-        CurveTween(curve: Curves.elasticOut),
-      ),
-      weight: 65,
-    ),
-  ]).animate(_c);
+  );
 
   @override
   void dispose() {
@@ -965,15 +960,12 @@ class _HoverBounceState extends State<_HoverBounce>
     super.dispose();
   }
 
-  void _pop() {
-    // Replay from the start so a re-entry always bounces afresh.
-    _c.forward(from: 0);
-  }
-
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => _pop(),
+      // Enter: grow and hold enlarged. Exit: reverse back to the resting size.
+      onEnter: (_) => _c.forward(),
+      onExit: (_) => _c.reverse(),
       child: ScaleTransition(
         scale: _scale,
         alignment: widget.alignment,
