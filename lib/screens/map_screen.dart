@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -28,6 +29,60 @@ class MapCommands extends ChangeNotifier {
   void openTrip(String tripId) {
     _openTripId = tripId;
     notifyListeners();
+  }
+}
+
+/// Live-tunable gesture "feel" parameters — sensitivity and damping — so they
+/// can be dialed in against a running map instead of guessed at and
+/// hot-restarted each time. Read by [_MapScreenState] on every build; the one
+/// UI that ever writes to them is [_MapInteractionTuningDialog], itself gated
+/// behind [kDebugMode] so a release build always runs these defaults untouched.
+///
+/// The defaults (and which knobs exist at all) follow the platform each
+/// parameter actually plays on:
+///   • **Web/desktop wheel zoom** — this screen's own eased, cursor-focused
+///     replacement for flutter_map's built-in (instant, per-notch) scroll
+///     handler. [wheelZoomPerScroll] matches flutter_map's own
+///     `scrollWheelVelocity` default (0.005); the glide's easing curve is set
+///     in `_onWheelZoom` to MapLibre GL JS's own default drag-pan bezier
+///     (`bezier(0, 0, 0.3, 1)`), and [wheelZoomEaseMs] is this screen's own
+///     duration for that glide (MapLibre's equivalent is velocity-driven, but
+///     flutter_map's camera has no exposed velocity to drive off of).
+///   • **Touch pinch/rotate/pan** — flutter_map's built-in multi-finger
+///     *gesture race*: each candidate gesture (pinch-zoom, pinch-move,
+///     two-finger rotate) has its own threshold, and whichever crosses first
+///     wins outright and locks the others out for that touch — the same
+///     "decisive lock, no straddling" role UIKit's gesture-recognizer
+///     thresholds and `UIScrollView.decelerationRate` play on iOS/MapKit:
+///     Apple's own guidance is that small changes to these numbers swing the
+///     felt behaviour a lot and must be tuned by hand, which is exactly why
+///     they're exposed here rather than fixed at flutter_map's defaults.
+class MapInteractionTuning {
+  final wheelZoomPerScroll = ValueNotifier<double>(0.005);
+  final wheelZoomEaseMs = ValueNotifier<double>(220);
+  final pinchZoomThreshold = ValueNotifier<double>(0.5);
+  final pinchMoveThreshold = ValueNotifier<double>(40.0);
+  final rotationThreshold = ValueNotifier<double>(20.0);
+  final multiFingerRace = ValueNotifier<bool>(true);
+
+  /// Fires when any single parameter above changes, so the map screen can
+  /// rebuild once instead of wiring up six separate listeners.
+  late final Listenable listenable = Listenable.merge([
+    wheelZoomPerScroll,
+    wheelZoomEaseMs,
+    pinchZoomThreshold,
+    pinchMoveThreshold,
+    rotationThreshold,
+    multiFingerRace,
+  ]);
+
+  void dispose() {
+    wheelZoomPerScroll.dispose();
+    wheelZoomEaseMs.dispose();
+    pinchZoomThreshold.dispose();
+    pinchMoveThreshold.dispose();
+    rotationThreshold.dispose();
+    multiFingerRace.dispose();
   }
 }
 
@@ -75,14 +130,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// wheel zoom is currently settling.
   double? _wheelTargetZoom;
 
-  /// Zoom change per unit of scroll-wheel delta — flutter_map's own default
-  /// (`scrollWheelVelocity`), kept so the sensitivity is unchanged; only the
-  /// easing below is new.
-  static const double _wheelZoomPerScroll = 0.005;
-
   /// Ceiling for wheel zoom. The map sets no `maxZoom`, so this just keeps the
   /// eased animation from chasing an unbounded target on a long scroll.
   static const double _wheelMaxZoom = 20;
+
+  /// Live-tunable sensitivity/damping for both the wheel-zoom glide and the
+  /// touch multi-finger gesture race. See [MapInteractionTuning].
+  final MapInteractionTuning _tuning = MapInteractionTuning();
 
   @override
   void initState() {
@@ -93,6 +147,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       if (mounted) _warmUpBubble();
     });
     widget.commands?.addListener(_onCommand);
+    // Rebuilds the map (fresh InteractionOptions / wheel-zoom constants) the
+    // moment a debug-panel slider moves, so tuning feels live.
+    _tuning.listenable.addListener(_onTuningChanged);
+  }
+
+  void _onTuningChanged() {
+    if (mounted) setState(() {});
   }
 
   /// Opens the trip the 旅途 panel asked for as the map's floating records
@@ -122,6 +183,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         onLabels: (hidden) => setState(() => _labelsHidden = hidden),
         onCurve: (curve) => setState(() => _curveStyle = curve),
       ),
+    );
+  }
+
+  /// Opens the debug-only interaction-tuning dialog (see [MapInteractionTuning]
+  /// and [_MapTuningButton], whose one caller already gates this behind
+  /// [kDebugMode]). Sliders write straight into [_tuning]'s notifiers, which
+  /// the map is already listening to via [_onTuningChanged].
+  void _openTuningPanel() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => _MapInteractionTuningDialog(tuning: _tuning),
     );
   }
 
@@ -240,6 +312,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     widget.commands?.removeListener(_onCommand);
+    _tuning.listenable.removeListener(_onTuningChanged);
+    _tuning.dispose();
     _moveController?.dispose();
     _hover.dispose();
     _selectedN.dispose();
@@ -253,6 +327,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     LatLng dest,
     double destZoom, {
     Duration duration = const Duration(milliseconds: 300),
+    Curve easing = Curves.easeOutCubic,
     VoidCallback? onArrived,
   }) {
     final startCenter = _map.camera.center;
@@ -266,7 +341,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     _moveController?.dispose();
     final controller = AnimationController(vsync: this, duration: duration);
     _moveController = controller;
-    final curve = CurvedAnimation(parent: controller, curve: Curves.easeOutCubic);
+    final curve = CurvedAnimation(parent: controller, curve: easing);
 
     controller.addListener(() {
       _map.move(
@@ -284,15 +359,28 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     controller.forward();
   }
 
+  /// MapLibre GL JS's own default easing for its inertial drag-pan/zoom glide
+  /// (`bezier(0, 0, 0.3, 1)` — a plain ease-out with no overshoot). Reused
+  /// here for the wheel-zoom glide below so this screen's one hand-rolled
+  /// interaction matches the reference implementation's *shape*, even though
+  /// flutter_map gives us a fixed duration to drive it with rather than a
+  /// true velocity.
+  static const Curve _wheelZoomEasing = Cubic(0.0, 0.0, 0.3, 1.0);
+
   /// Handles a mouse-wheel / trackpad scroll as an *eased* zoom toward the
   /// cursor, giving the "slight inertia" glide that flutter_map's built-in
   /// (instant, per-notch) scroll-wheel zoom lacks. Successive notches build on
   /// [_wheelTargetZoom] so a fast scroll still zooms the full distance, and
   /// [MapCamera.focusedZoomCenter] keeps the point under the cursor pinned —
-  /// same focal behaviour as the native handler we replaced.
+  /// same focal-point-zoom behaviour as the native handler we replaced (and
+  /// as flutter_map's own pinch-zoom and double-tap-zoom already use — see
+  /// [MapInteractionTuning]'s doc comment for why nothing else here needed to
+  /// change to get that). Sensitivity and glide duration come from [_tuning]
+  /// so they're live-adjustable from the debug panel.
   void _onWheelZoom(PointerScrollEvent event, double minZoom) {
     final base = _wheelTargetZoom ?? _map.camera.zoom;
-    final target = (base - event.scrollDelta.dy * _wheelZoomPerScroll)
+    final target = (base -
+            event.scrollDelta.dy * _tuning.wheelZoomPerScroll.value)
         .clamp(minZoom, _wheelMaxZoom)
         .toDouble();
     _wheelTargetZoom = target;
@@ -301,7 +389,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     _animatedMove(
       _map.camera.focusedZoomCenter(cursor, target),
       target,
-      duration: const Duration(milliseconds: 220),
+      duration:
+          Duration(milliseconds: _tuning.wheelZoomEaseMs.value.round()),
+      easing: _wheelZoomEasing,
       onArrived: () => _wheelTargetZoom = null,
     );
   }
@@ -561,15 +651,38 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 // Can't zoom out past the point where the map fills the window
                 // vertically (top & bottom edges flush with the page).
                 minZoom: minZoom,
-                interactionOptions: const InteractionOptions(
+                interactionOptions: InteractionOptions(
                   // Drop the built-in scroll-wheel zoom (instant, per-notch);
                   // it's replaced below with an eased, cursor-focused glide.
                   flags: InteractiveFlag.all & ~InteractiveFlag.scrollWheelZoom,
-                  // Race the multi-finger gestures so a two-finger pinch that
-                  // crosses the zoom threshold *wins* and locks out rotation —
-                  // no more accidental spin while zooming. (Fling inertia stays
-                  // on via InteractiveFlag.flingAnimation, at its defaults.)
-                  enableMultiFingerGestureRace: true,
+                  // Race the multi-finger touch gestures — pinch-zoom,
+                  // two-finger rotate, two-finger pan — against their own
+                  // thresholds below; whichever crosses first *wins the race
+                  // and locks the others out* for that touch, the same
+                  // decisive-lock role UIKit's gesture-recognizer thresholds
+                  // play on iOS/MapKit. Without this flag flutter_map applies
+                  // every recognized gesture simultaneously, so a pinch that
+                  // wobbles a few degrees bleeds a bit of accidental rotation
+                  // into the zoom. (Fling inertia stays on via
+                  // InteractiveFlag.flingAnimation, at flutter_map's defaults
+                  // — its fling physics use a fixed critically-damped spring,
+                  // not a configurable friction curve, so there's no touch
+                  // equivalent of UIScrollView.decelerationRate to expose.)
+                  enableMultiFingerGestureRace: _tuning.multiFingerRace.value,
+                  rotationThreshold: _tuning.rotationThreshold.value,
+                  pinchZoomThreshold: _tuning.pinchZoomThreshold.value,
+                  pinchMoveThreshold: _tuning.pinchMoveThreshold.value,
+                  // Spelled out explicitly (they match flutter_map's own
+                  // defaults) so the mutex is visible here rather than implicit
+                  // in the library: a pinch-zoom win locks out rotation, a
+                  // rotate win locks out zoom/pan — nothing straddles once a
+                  // winner is decided. Precedence when two thresholds cross in
+                  // the same frame is pinchZoom > rotate > pinchMove.
+                  rotationWinGestures: MultiFingerGesture.rotate,
+                  pinchZoomWinGestures: MultiFingerGesture.pinchZoom |
+                      MultiFingerGesture.pinchMove,
+                  pinchMoveWinGestures: MultiFingerGesture.pinchZoom |
+                      MultiFingerGesture.pinchMove,
                 ),
                 onTap: (_, point) {
                   // An open popup (preview or add form) gets dismissed first.
@@ -771,6 +884,16 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               bottom: 16,
               child: _MapSettingsButton(onTap: _openSettings),
             ),
+            // Interaction-tuning button — debug builds only. Opens live
+            // sliders for the wheel-zoom and multi-finger gesture parameters
+            // in [MapInteractionTuning], so gesture feel can be dialed in
+            // against the running map instead of edited and hot-restarted.
+            if (kDebugMode)
+              Positioned(
+                left: 16,
+                bottom: 128,
+                child: _MapTuningButton(onTap: _openTuningPanel),
+              ),
             // Scale bar, tucked in just above the settings button in the
             // bottom-left corner. It reads the live camera off the controller,
             // so it re-labels itself as the map is panned and zoomed.
@@ -1891,6 +2014,179 @@ class _MapSettingsButton extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The debug-only interaction-tuning button (bottom-left, above the map
+/// settings button). Only ever built when [kDebugMode] is true — its caller
+/// checks that, not this widget — so there's nothing to gate here.
+class _MapTuningButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _MapTuningButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: '交互手感调试 (debug)',
+      child: Material(
+        color: theme.colorScheme.surface,
+        elevation: 3,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: Icon(Icons.tune, color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Live sliders over every [MapInteractionTuning] parameter, grouped by which
+/// platform/input channel each one plays on (wheel zoom vs. touch gesture
+/// race) so the reference this screen tuned against is visible right next to
+/// the knob. Each slider writes straight into the tuning notifier on change —
+/// no local state, no "apply" button — so the map behind the dialog updates
+/// live as it's dragged, which is the whole point of exposing this at all.
+class _MapInteractionTuningDialog extends StatelessWidget {
+  final MapInteractionTuning tuning;
+
+  const _MapInteractionTuningDialog({required this.tuning});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.tune, color: theme.colorScheme.primary),
+                  const SizedBox(width: 10),
+                  Text('交互手感调试', style: theme.textTheme.titleLarge),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              Text(
+                '仅调试构建可见，正式版恒定使用下面的默认值',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+              const Divider(height: 24),
+              _sectionLabel(theme, 'Web / 桌面滚轮缩放（参考 MapLibre GL JS）'),
+              _slider(
+                label: '滚轮灵敏度',
+                notifier: tuning.wheelZoomPerScroll,
+                min: 0.001,
+                max: 0.02,
+                decimals: 3,
+              ),
+              _slider(
+                label: '缓动时长 (ms)',
+                notifier: tuning.wheelZoomEaseMs,
+                min: 80,
+                max: 500,
+                decimals: 0,
+              ),
+              const Divider(height: 24),
+              _sectionLabel(theme, '触屏多指手势竞速（参考 UIScrollView / MapKit 阈值思路）'),
+              _slider(
+                label: '捏合缩放阈值',
+                notifier: tuning.pinchZoomThreshold,
+                min: 0.1,
+                max: 2.0,
+                decimals: 2,
+              ),
+              _slider(
+                label: '双指平移阈值 (px)',
+                notifier: tuning.pinchMoveThreshold,
+                min: 10,
+                max: 100,
+                decimals: 0,
+              ),
+              _slider(
+                label: '双指旋转阈值 (°)',
+                notifier: tuning.rotationThreshold,
+                min: 5,
+                max: 45,
+                decimals: 0,
+              ),
+              ValueListenableBuilder<bool>(
+                valueListenable: tuning.multiFingerRace,
+                builder: (context, race, _) => SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('多指手势竞速互斥锁定'),
+                  subtitle: const Text('关闭后手势不再互斥，捏合/旋转/平移可能同时生效'),
+                  value: race,
+                  onChanged: (v) => tuning.multiFingerRace.value = v,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionLabel(ThemeData theme, String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          text,
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            letterSpacing: 0.2,
+          ),
+        ),
+      );
+
+  Widget _slider({
+    required String label,
+    required ValueNotifier<double> notifier,
+    required double min,
+    required double max,
+    required int decimals,
+  }) {
+    return ValueListenableBuilder<double>(
+      valueListenable: notifier,
+      builder: (context, value, _) => Row(
+        children: [
+          SizedBox(
+            width: 132,
+            child: Text(label, style: const TextStyle(fontSize: 12)),
+          ),
+          Expanded(
+            child: Slider(
+              value: value.clamp(min, max).toDouble(),
+              min: min,
+              max: max,
+              onChanged: (v) => notifier.value = v,
+            ),
+          ),
+          SizedBox(
+            width: 44,
+            child: Text(value.toStringAsFixed(decimals),
+                style: const TextStyle(fontSize: 12)),
+          ),
+        ],
       ),
     );
   }
