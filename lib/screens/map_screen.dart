@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -35,8 +34,10 @@ class MapCommands extends ChangeNotifier {
 /// Live-tunable gesture "feel" parameters — sensitivity and damping — so they
 /// can be dialed in against a running map instead of guessed at and
 /// hot-restarted each time. Read by [_MapScreenState] on every build; the one
-/// UI that ever writes to them is [_MapInteractionTuningDialog], itself gated
-/// behind [kDebugMode] so a release build always runs these defaults untouched.
+/// UI that ever writes to them is [_MapInteractionTuningDialog], opened from
+/// the always-present [_MapTuningButton] (deliberately not gated behind
+/// `kDebugMode` — this app's web preview is a `--release` build, where that
+/// flag is always false, so a debug-only gate would never render there).
 ///
 /// The defaults (and which knobs exist at all) follow the platform each
 /// parameter actually plays on:
@@ -186,10 +187,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  /// Opens the debug-only interaction-tuning dialog (see [MapInteractionTuning]
-  /// and [_MapTuningButton], whose one caller already gates this behind
-  /// [kDebugMode]). Sliders write straight into [_tuning]'s notifiers, which
-  /// the map is already listening to via [_onTuningChanged].
+  /// Opens the interaction-tuning dialog (see [MapInteractionTuning] and
+  /// [_MapTuningButton]). Sliders write straight into [_tuning]'s notifiers,
+  /// which the map is already listening to via [_onTuningChanged].
   void _openTuningPanel() {
     showDialog<void>(
       context: context,
@@ -884,16 +884,19 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               bottom: 16,
               child: _MapSettingsButton(onTap: _openSettings),
             ),
-            // Interaction-tuning button — debug builds only. Opens live
-            // sliders for the wheel-zoom and multi-finger gesture parameters
-            // in [MapInteractionTuning], so gesture feel can be dialed in
-            // against the running map instead of edited and hot-restarted.
-            if (kDebugMode)
-              Positioned(
-                left: 16,
-                bottom: 128,
-                child: _MapTuningButton(onTap: _openTuningPanel),
-              ),
+            // Interaction-tuning button. Opens live sliders for the wheel-zoom
+            // and multi-finger gesture parameters in [MapInteractionTuning],
+            // so gesture feel can be dialed in against the running map
+            // instead of edited and hot-restarted. Deliberately *not* gated
+            // behind kDebugMode: the web preview this app is actually tested
+            // on (see deploy-pages.yml) is a `flutter build web --release`
+            // build, where kDebugMode is always false — a debug-only gate
+            // would never render there.
+            Positioned(
+              left: 16,
+              bottom: 128,
+              child: _MapTuningButton(onTap: _openTuningPanel),
+            ),
             // Scale bar, tucked in just above the settings button in the
             // bottom-left corner. It reads the live camera off the controller,
             // so it re-labels itself as the map is panned and zoomed.
@@ -2019,9 +2022,9 @@ class _MapSettingsButton extends StatelessWidget {
   }
 }
 
-/// The debug-only interaction-tuning button (bottom-left, above the map
-/// settings button). Only ever built when [kDebugMode] is true — its caller
-/// checks that, not this widget — so there's nothing to gate here.
+/// The interaction-tuning button (bottom-left, above the map settings
+/// button). Always present rather than gated behind `kDebugMode`, since the
+/// web preview this app is tested on is a release build.
 class _MapTuningButton extends StatelessWidget {
   final VoidCallback onTap;
 
