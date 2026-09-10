@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 
 import '../data/travel_repository.dart';
@@ -5,6 +7,17 @@ import '../models/entry.dart';
 import '../models/entry_type.dart';
 import '../models/person.dart';
 import '../models/trip.dart';
+
+/// The 1-based day-of-trip for [timestamp] relative to [tripStart] (calendar
+/// dates, time-of-day ignored) — day 1 is the trip's start date. Clamped to 1
+/// for anything dated before the start (clock drift, a since-edited start
+/// date) rather than producing a day 0 or negative day. Shared by the trip
+/// detail list and the map's per-day route lines so both agree on "day N".
+int dayIndexInTrip(DateTime timestamp, DateTime tripStart) {
+  final start = DateTime(tripStart.year, tripStart.month, tripStart.day);
+  final day = DateTime(timestamp.year, timestamp.month, timestamp.day);
+  return math.max(1, day.difference(start).inDays + 1);
+}
 
 /// Holds the app's data and the active filters shared across views.
 ///

@@ -76,7 +76,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           Expanded(
             child: entries.isEmpty
                 ? const Center(child: Text('这趟旅途还没有记录'))
-                : EntryGroupedList(entries: entries),
+                : EntryGroupedList(entries: entries, tripStart: trip.startDate),
           ),
         ],
       ),
