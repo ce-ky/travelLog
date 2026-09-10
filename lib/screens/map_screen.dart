@@ -585,33 +585,53 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         ? entries.first.location!.latLng
         : const LatLng(35.0, 135.76);
 
-    // One polyline per trip, joining that trip's located entries in time order.
+    // Trips grouped flat (all located entries) — used both for clustering
+    // below and as the source for the per-day route split just after.
+    final tripsById = {for (final t in appState.trips) t.id: t};
     final byTrip = <String, List<Entry>>{};
     for (final e in entries) {
       (byTrip[e.tripId] ??= []).add(e);
     }
+
+    // One polyline per trip-day, joining that day's located entries in time
+    // order — so a multi-day trip reads as a sequence of daily legs rather
+    // than one path through the whole trip. Day number is derived from each
+    // entry's date against its trip's startDate (see dayIndexInTrip).
     final polylines = <Polyline>[];
     byTrip.forEach((tripId, list) {
-      if (list.length < 2) return;
-      list.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-      final located = [for (final e in list) e.location!.latLng];
-      polylines.add(Polyline(
-        // A flowing curve through the records rather than raw straight hops, so
-        // a trip's path reads as one continuous journey. The shape depends on
-        // the chosen [_curveStyle]: a centripetal spline through the points, or
-        // true great-circle arcs between them.
-        points: _curveStyle == _CurveStyle.greatCircle
-            ? _greatCircleCurve(located)
-            : _centripetalCurve(located),
-        // A thin dark-grey dashed line for every trip — a quiet route hint that
-        // doesn't compete with the records themselves (trips are still told
-        // apart by their cluster colour when zoomed out).
-        color: Colors.grey.shade700,
-        // Thickens smoothly with zoom (to ~3× by street level) so the route
-        // grows more prominent as you close in on it.
-        strokeWidth: _routeStroke(_zoom),
-        pattern: StrokePattern.dashed(segments: const [7, 6]),
-      ));
+      final trip = tripsById[tripId];
+      if (trip == null) return;
+      final byDay = <int, List<Entry>>{};
+      for (final e in list) {
+        final day = dayIndexInTrip(e.timestamp, trip.startDate);
+        (byDay[day] ??= []).add(e);
+      }
+      final days = byDay.keys.toList()..sort();
+      final lastDay = days.isEmpty ? 1 : days.last;
+      for (final day in days) {
+        final dayList = byDay[day]!;
+        if (dayList.length < 2) continue;
+        dayList.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        final located = [for (final e in dayList) e.location!.latLng];
+        polylines.add(Polyline(
+          // A flowing curve through the records rather than raw straight hops, so
+          // a day's path reads as one continuous leg. The shape depends on
+          // the chosen [_curveStyle]: a centripetal spline through the points, or
+          // true great-circle arcs between them.
+          points: _curveStyle == _CurveStyle.greatCircle
+              ? _greatCircleCurve(located)
+              : _centripetalCurve(located),
+          // Each trip keeps its own stable hue (still a quiet, muted tone, not
+          // a bright accent) but darkens day over day, so a multi-day trip's
+          // route visibly progresses from a pale first day to a deep last day
+          // while trips remain told apart by hue as before.
+          color: _tripDayColor(tripId, day, lastDay),
+          // Thickens smoothly with zoom (to ~3× by street level) so the route
+          // grows more prominent as you close in on it.
+          strokeWidth: _routeStroke(_zoom),
+          pattern: StrokePattern.dashed(segments: const [7, 6]),
+        ));
+      }
     });
 
     final style = _mapStyles[_styleIndex];
@@ -1176,6 +1196,18 @@ const Color _recordStroke = Color(0xFFEF6C00); // deeper orange (orange 800)
 Color _tripColor(String tripId) {
   final hue = (tripId.hashCode % 360).abs().toDouble();
   return HSLColor.fromAHSL(1, hue, 0.55, 0.45).toColor();
+}
+
+/// [_tripColor]'s hue, but lightened for day 1 and darkened towards
+/// [lastDay] — so a trip's daily route legs read in order (pale → deep) while
+/// distinct trips are still told apart by hue as before. A single-day trip
+/// (lastDay == 1) just gets [_tripColor] unchanged.
+Color _tripDayColor(String tripId, int day, int lastDay) {
+  final hue = (tripId.hashCode % 360).abs().toDouble();
+  if (lastDay <= 1) return HSLColor.fromAHSL(1, hue, 0.55, 0.45).toColor();
+  final t = (day - 1) / (lastDay - 1); // 0 (day 1) .. 1 (lastDay)
+  final lightness = 0.7 - 0.4 * t; // 0.70 (pale) .. 0.30 (deep)
+  return HSLColor.fromAHSL(1, hue, 0.55, lightness).toColor();
 }
 
 /// Densifies [pts] into a **centripetal** Catmull-Rom spline (the α=0.5

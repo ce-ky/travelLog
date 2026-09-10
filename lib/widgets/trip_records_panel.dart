@@ -85,6 +85,7 @@ class TripRecordsPanel extends StatelessWidget {
               ? _centeredHint(theme, Icons.notes_outlined, '这趟旅途还没有记录')
               : EntryGroupedList(
                   entries: entries,
+                  tripStart: trip.startDate,
                   onEntryTap: onRecordTap,
                   selectedEntryId: selectedEntryId,
                 ),
