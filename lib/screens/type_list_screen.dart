@@ -39,7 +39,10 @@ class TypeListScreen extends StatelessWidget {
               ? const Center(child: Text('没有符合条件的记录'))
               : ListView.builder(
                   itemCount: entries.length,
-                  itemBuilder: (_, i) => EntryCard(entry: entries[i]),
+                  itemBuilder: (_, i) => EntryCard(
+                    key: ValueKey(entries[i].id),
+                    entry: entries[i],
+                  ),
                 ),
         ),
       ],

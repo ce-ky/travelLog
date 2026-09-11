@@ -14,6 +14,7 @@ import '../models/trip.dart';
 import '../state/app_state.dart';
 import '../utils/image_upload.dart';
 import '../utils/photo_metadata.dart';
+import '../widgets/entry_image.dart';
 import 'location_picker_screen.dart';
 
 /// The new-entry form itself, independent of how it's presented. It's hosted
@@ -23,7 +24,14 @@ class EntryForm extends StatefulWidget {
   final String? initialTripId;
   final LatLng? initialPoint;
 
-  /// Called after the entry is saved successfully, with the created entry.
+  /// When set, the form edits this existing record in place instead of
+  /// creating a new one: every field is prefilled from it, its id and other
+  /// untouched fields (title, tags, marker glyph) are kept on save, and the
+  /// header reads "编辑记录".
+  final Entry? initialEntry;
+
+  /// Called after the entry is saved successfully, with the created/updated
+  /// entry.
   final ValueChanged<Entry> onSaved;
 
   /// Called when the user dismisses the form without saving.
@@ -37,6 +45,7 @@ class EntryForm extends StatefulWidget {
     super.key,
     this.initialTripId,
     this.initialPoint,
+    this.initialEntry,
     required this.onSaved,
     required this.onClose,
     this.compact = false,
@@ -60,6 +69,10 @@ class _EntryFormState extends State<EntryForm> {
   DateTime _when = DateTime.now();
 
   LatLng? _point;
+
+  /// When editing, the record's already-uploaded images (storage paths) that
+  /// haven't been removed — shown first in the gallery, ahead of new picks.
+  List<String> _existingImages = [];
 
   /// Up to [_maxImages] picked images, in display order.
   final List<XFile> _pickedImages = [];
@@ -88,6 +101,20 @@ class _EntryFormState extends State<EntryForm> {
   @override
   void initState() {
     super.initState();
+    final initial = widget.initialEntry;
+    if (initial != null) {
+      _tripId = initial.tripId;
+      _type = initial.type;
+      _body.text = initial.body;
+      _when = initial.timestamp;
+      // The record already has a time; don't let (nonexistent) photo-pick
+      // metadata touch it.
+      _whenTouched = true;
+      _point = initial.location?.latLng;
+      _placeName.text = initial.location?.placeName ?? '';
+      _existingImages = List.of(initial.imagePaths);
+      return;
+    }
     _point = widget.initialPoint;
     // Prefer an explicit trip; otherwise, if adding at a point, auto-pick the
     // trip whose nearest record is within [_autoSelectKm].
@@ -152,7 +179,8 @@ class _EntryFormState extends State<EntryForm> {
 
   bool get _needsImage => _type.isImageBacked;
 
-  int get _remainingImageSlots => _maxImages - _pickedImages.length;
+  int get _remainingImageSlots =>
+      _maxImages - _existingImages.length - _pickedImages.length;
 
   Future<void> _pickImages() async {
     if (_remainingImageSlots <= 0) return;
@@ -177,6 +205,10 @@ class _EntryFormState extends State<EntryForm> {
 
   void _removeImageAt(int index) {
     setState(() => _pickedImages.removeAt(index));
+  }
+
+  void _removeExistingImageAt(int index) {
+    setState(() => _existingImages.removeAt(index));
   }
 
   /// Pulls a geotag and capture time out of the newly-added photos' EXIF and
@@ -310,7 +342,7 @@ class _EntryFormState extends State<EntryForm> {
       setState(() => _error = '请选择所属旅途');
       return;
     }
-    if (_needsImage && _pickedImages.isEmpty) {
+    if (_needsImage && _existingImages.isEmpty && _pickedImages.isEmpty) {
       setState(() => _error = '这类记录需要至少选择一张图片');
       return;
     }
@@ -321,29 +353,31 @@ class _EntryFormState extends State<EntryForm> {
     });
 
     final appState = context.read<AppState>();
+    final entryId = widget.initialEntry?.id ?? _entryId;
     try {
-      // Upload each picked image; keep them in the order the user arranged.
-      final imagePaths = <String>[];
+      // Upload each newly picked image; the kept existing paths lead, then the
+      // new ones, in the order the user arranged them.
+      final newPaths = <String>[];
       for (var i = 0; i < _pickedImages.length; i++) {
         final image = _pickedImages[i];
         final original = await image.readAsBytes();
         final upload = prepareUpload(original, image.name);
         final path = await appState.uploadImage(
           tripId: _tripId!,
-          entryId: _entryId,
+          entryId: entryId,
           bytes: upload.bytes,
           contentType: upload.contentType,
           index: i,
         );
-        imagePaths.add(path);
+        newPaths.add(path);
       }
 
       final entry = Entry(
-        id: _entryId,
+        id: entryId,
         tripId: _tripId!,
         type: _type,
         // No title field; the card leads with the images and body instead.
-        title: '',
+        title: widget.initialEntry?.title ?? '',
         body: _body.text.trim(),
         timestamp: _when,
         location: _point == null
@@ -353,7 +387,9 @@ class _EntryFormState extends State<EntryForm> {
                 lng: _point!.longitude,
                 placeName: _placeName.text.trim(),
               ),
-        imagePaths: imagePaths,
+        tags: widget.initialEntry?.tags ?? const [],
+        imagePaths: [..._existingImages, ...newPaths],
+        markerGlyph: widget.initialEntry?.markerGlyph ?? '📍',
       );
       await appState.addEntry(entry);
 
@@ -389,10 +425,12 @@ class _EntryFormState extends State<EntryForm> {
                   const SizedBox(height: 14),
                   if (_needsImage) ...[
                     _ImageGalleryField(
+                      existingPaths: _existingImages,
                       images: _pickedImages,
                       maxImages: _maxImages,
                       tileSize: 96,
                       onAdd: _pickImages,
+                      onRemoveExistingAt: _removeExistingImageAt,
                       onRemoveAt: _removeImageAt,
                     ),
                     const SizedBox(height: 14),
@@ -442,10 +480,12 @@ class _EntryFormState extends State<EntryForm> {
                 SizedBox(
                   width: 140,
                   child: _ImageGalleryField(
+                    existingPaths: _existingImages,
                     images: _pickedImages,
                     maxImages: _maxImages,
                     tileSize: 62,
                     onAdd: _pickImages,
+                    onRemoveExistingAt: _removeExistingImageAt,
                     onRemoveAt: _removeImageAt,
                   ),
                 ),
@@ -630,12 +670,15 @@ class _EntryFormState extends State<EntryForm> {
     );
   }
 
+  bool get _isEdit => widget.initialEntry != null;
+
   Widget _header(ThemeData theme) {
+    final title = _isEdit ? '编辑记录' : '新增记录';
     if (widget.compact) {
       return Row(
         children: [
           Expanded(
-            child: Text('新增记录', style: theme.textTheme.titleMedium),
+            child: Text(title, style: theme.textTheme.titleMedium),
           ),
           InkWell(
             onTap: widget.onClose,
@@ -643,6 +686,23 @@ class _EntryFormState extends State<EntryForm> {
             child: const Padding(
               padding: EdgeInsets.all(4),
               child: Icon(Icons.close, size: 20),
+            ),
+          ),
+        ],
+      );
+    }
+    // Editing happens inline in a card rather than a dismissible sheet, so
+    // show an explicit close button instead of the sheet's drag handle.
+    if (_isEdit) {
+      return Row(
+        children: [
+          Expanded(child: Text(title, style: theme.textTheme.titleLarge)),
+          InkWell(
+            onTap: widget.onClose,
+            customBorder: const CircleBorder(),
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.close, size: 22),
             ),
           ),
         ],
@@ -661,7 +721,7 @@ class _EntryFormState extends State<EntryForm> {
           ),
         ),
         const SizedBox(height: 14),
-        Text('新增记录', style: theme.textTheme.titleLarge),
+        Text(title, style: theme.textTheme.titleLarge),
       ],
     );
   }
@@ -716,31 +776,73 @@ class _TapField extends StatelessWidget {
 /// removable thumbnail, and an "add" tile appears while slots remain. Tiles wrap
 /// so the field fits both the full sheet and the narrow map-popup strip.
 class _ImageGalleryField extends StatelessWidget {
+  /// Already-uploaded images (storage paths), shown ahead of new picks —
+  /// empty outside of edit mode.
+  final List<String> existingPaths;
   final List<XFile> images;
   final int maxImages;
   final double tileSize;
   final VoidCallback onAdd;
+  final void Function(int index) onRemoveExistingAt;
   final void Function(int index) onRemoveAt;
 
   const _ImageGalleryField({
+    this.existingPaths = const [],
     required this.images,
     required this.maxImages,
     required this.tileSize,
     required this.onAdd,
+    this.onRemoveExistingAt = _noop,
     required this.onRemoveAt,
   });
 
+  static void _noop(int index) {}
+
   @override
   Widget build(BuildContext context) {
-    final canAdd = images.length < maxImages;
+    final canAdd = existingPaths.length + images.length < maxImages;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
+        for (var i = 0; i < existingPaths.length; i++)
+          _existingThumb(context, existingPaths[i], i),
         for (var i = 0; i < images.length; i++)
           _thumb(context, images[i], i),
         if (canAdd) _addTile(context),
       ],
+    );
+  }
+
+  Widget _existingThumb(BuildContext context, String path, int index) {
+    final theme = Theme.of(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: tileSize,
+        height: tileSize,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            EntryImage(
+              imagePath: path,
+              width: tileSize,
+              height: tileSize,
+              fallback: Container(
+                color: theme.colorScheme.surfaceContainerHighest,
+              ),
+            ),
+            Positioned(
+              top: 2,
+              right: 2,
+              child: _ImageAction(
+                icon: Icons.close,
+                onTap: () => onRemoveExistingAt(index),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

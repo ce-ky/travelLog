@@ -220,7 +220,7 @@ class _GroupedList extends StatelessWidget {
             style: const TextStyle(
                 fontWeight: FontWeight.bold, color: Colors.grey)),
       ));
-      children.addAll(items.map((e) => EntryCard(entry: e)));
+      children.addAll(items.map((e) => EntryCard(key: ValueKey(e.id), entry: e)));
     });
 
     return ListView(children: children);
