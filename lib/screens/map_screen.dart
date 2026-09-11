@@ -424,11 +424,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// Current map zoom, tracked so markers can collapse into per-trip clusters
   /// when zoomed out. There are three bands, from zoomed-out to zoomed-in:
   ///   • below [_recordZoom]            → per-trip cluster bubbles
-  ///   • [_recordZoom, _pinZoom)        → small dots (records may still overlap
-  ///                                       at this scale, so a full teardrop pin
-  ///                                       each would collide — a tidy dot reads
-  ///                                       cleaner)
-  ///   • at/above [_pinZoom]            → full teardrop record pins
+  ///   • [_recordZoom, _pinZoom)        → small route-coloured dots for every
+  ///                                       record (records may still overlap
+  ///                                       at this scale, so a full marker
+  ///                                       each would collide — a tidy dot
+  ///                                       reads cleaner)
+  ///   • at/above [_pinZoom]            → each record's own marker: a photo +
+  ///                                       title thumbnail if it has an image,
+  ///                                       otherwise the same route-coloured dot
   double _zoom = 5;
   static const double _recordZoom = 9;
   static const double _pinZoom = 13;
@@ -440,8 +443,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// Zoomed out far enough to show per-trip cluster bubbles instead of records.
   bool get _collapsed => _zoom < _recordZoom;
 
-  /// The middle band: records are shown, but as small dots rather than teardrop
-  /// pins because at this scale the pins would overlap one another.
+  /// The middle band: every record is shown as a small dot rather than its
+  /// full marker, because at this scale full markers would overlap one another.
   bool get _dots => !_collapsed && _zoom < _pinZoom;
 
   /// The zoom the route line's width was last computed at, so a smooth zoom only
@@ -598,6 +601,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     // than one path through the whole trip. Day number is derived from each
     // entry's date against its trip's startDate (see dayIndexInTrip).
     final polylines = <Polyline>[];
+    // Each record's marker (thumbnail or dot) is coloured to match the route
+    // leg it sits on, so markers read as belonging to their trip/day's line
+    // instead of a single uniform hue — filled in below alongside the lines.
+    final entryColor = <String, Color>{};
     byTrip.forEach((tripId, list) {
       final trip = tripsById[tripId];
       if (trip == null) return;
@@ -610,6 +617,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       final lastDay = days.isEmpty ? 1 : days.last;
       for (final day in days) {
         final dayList = byDay[day]!;
+        final dayColor = _tripDayColor(tripId, day, lastDay);
+        for (final e in dayList) {
+          entryColor[e.id] = dayColor;
+        }
         if (dayList.length < 2) continue;
         dayList.sort((a, b) => a.timestamp.compareTo(b.timestamp));
         final located = [for (final e in dayList) e.location!.latLng];
@@ -805,9 +816,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         )
                     else if (_dots)
                       // Middle band: individual records, but as small dots so
-                      // near-neighbours don't collide the way full teardrop pins
-                      // would at this scale. Tapping one zooms in (via
-                      // [_selectEntry]) to its full pin and expanded bubble.
+                      // near-neighbours don't collide the way the full markers
+                      // below would at this scale. Tapping one zooms in (via
+                      // [_selectEntry]) to its full marker and expanded bubble.
                       for (final e in entries)
                         Marker(
                           point: e.location!.latLng,
@@ -816,28 +827,47 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           // The dot sits centred right on the point.
                           child: _HoverScale(
                             child: _EntryDot(
+                              color: entryColor[e.id] ?? _recordFill,
                               onTap: () => _selectEntry(e),
                             ),
                           ),
                         )
                     else
-                      // Zoomed in: individual record pins. The selected one keeps
-                      // its pin (the expanded bubble, a separate layer below, sits
-                      // on top of it) so this list never rebuilds on selection.
+                      // Zoomed in: individual records, shown as a photo +
+                      // title thumbnail when the record carries an image, or
+                      // as a plain dot (matching its route leg's colour) when
+                      // it doesn't — no more one-size-fits-all pin bubble. The
+                      // selected one keeps its marker (the expanded bubble, a
+                      // separate layer below, sits on top of it) so this list
+                      // never rebuilds on selection.
                       for (final e in entries)
-                        Marker(
-                          point: e.location!.latLng,
-                          width: 30,
-                          height: 40,
-                          // Bottom-centre (the teardrop tip) sits on the point.
-                          alignment: Alignment.topCenter,
-                          child: _HoverScale(
-                            alignment: Alignment.bottomCenter,
-                            child: _EntryMarker(
-                              onTap: () => _selectEntry(e),
+                        if (e.hasImage)
+                          Marker(
+                            point: e.location!.latLng,
+                            width: 72,
+                            height: 84,
+                            // Bottom-centre (the tail tip) sits on the point.
+                            alignment: Alignment.topCenter,
+                            child: _HoverScale(
+                              alignment: Alignment.bottomCenter,
+                              child: _EntryThumbnailMarker(
+                                entry: e,
+                                onTap: () => _selectEntry(e),
+                              ),
+                            ),
+                          )
+                        else
+                          Marker(
+                            point: e.location!.latLng,
+                            width: 18,
+                            height: 18,
+                            child: _HoverScale(
+                              child: _EntryDot(
+                                color: entryColor[e.id] ?? _recordFill,
+                                onTap: () => _selectEntry(e),
+                              ),
                             ),
                           ),
-                        ),
                     // A pulsing pin marks exactly where the tap landed while the
                     // add-record popup is open.
                     if (_addingPoint != null)
@@ -1186,11 +1216,17 @@ class _PulsePainter extends CustomPainter {
       old.progress != progress || old.color != color;
 }
 
-/// The warm amber every record marker shares — the teardrop pins and the small
-/// dots alike — so records read as one consistent colour, set apart from the
-/// per-trip cluster hues. [_recordStroke] is a deeper orange for the rim.
+/// Fallback dot colour for a record whose trip/day couldn't be resolved (e.g.
+/// a stale id during a reload). Every other record dot is coloured to match
+/// its own route leg — see `entryColor` in [_MapScreenState.build].
 const Color _recordFill = Color(0xFFFFA726); // amber-orange (orange 400)
-const Color _recordStroke = Color(0xFFEF6C00); // deeper orange (orange 800)
+
+/// Darkens [color] for a dot's rim, so the border reads as a deeper shade of
+/// whatever route colour the dot itself was given rather than a fixed tone.
+Color _darken(Color color, [double amount = 0.25]) {
+  final hsl = HSLColor.fromColor(color);
+  return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
+}
 
 /// A stable colour per trip, so each trip's connecting line is distinguishable.
 Color _tripColor(String tripId) {
@@ -1391,108 +1427,96 @@ class _TripCluster extends StatelessWidget {
   }
 }
 
-/// A plain teardrop (map-pin) marker. Every record's pin is the same
-/// translucent-white material — a uniform, quiet marker regardless of whether
-/// the record carries an image.
-class _EntryMarker extends StatelessWidget {
+/// The at-a-glance marker for a record that carries at least one image: its
+/// first photo plus a one-line title, in the same frosted tailed-bubble shape
+/// the trip cluster label uses — so the map itself previews *which* record is
+/// which without needing a tap. Records without an image fall back to the
+/// plain [_EntryDot] instead (see the call site in [_MapScreenState.build]).
+class _EntryThumbnailMarker extends StatelessWidget {
+  final Entry entry;
   final VoidCallback onTap;
 
-  const _EntryMarker({required this.onTap});
+  const _EntryThumbnailMarker({required this.entry, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    // One shared look for all pins: a solid amber fill with a deeper-orange
-    // hairline rim to hold its edge against the map.
-    const fill = _recordFill;
-    const border = _recordStroke;
-
     return GestureDetector(
       onTap: onTap,
-      // RepaintBoundary caches the painted teardrop as its own layer, so during
-      // a map pan/zoom animation (or when the bubble appears) CanvasKit just
-      // re-composites the cached texture instead of re-running the painter for
-      // every visible pin each frame. Without it, N visible pins meant N
-      // re-paints per frame — the source of the "many pins on screen = stutter"
-      // behaviour.
-      child: RepaintBoundary(
-        child: CustomPaint(
-          painter: _TeardropPainter(fill: fill, border: border),
+      child: _FrostedBubble(
+        tailHeight: 10,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Padding(
+            padding: const EdgeInsets.all(5),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: EntryImage(
+                    imagePath: entry.imagePath,
+                    width: 60,
+                    height: 44,
+                    fit: BoxFit.cover,
+                    fallback: SizedBox(
+                      width: 60,
+                      height: 44,
+                      child: Center(
+                        child: Text(entry.markerGlyph,
+                            style: const TextStyle(fontSize: 18)),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                SizedBox(
+                  width: 60,
+                  child: Text(
+                    entry.displayTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-/// Paints a smooth teardrop whose tip is at the bottom-centre. Fill + a thin
-/// border + a soft shadow — the plainest map-pin shape.
-class _TeardropPainter extends CustomPainter {
-  final Color fill;
-  final Color border;
-
-  _TeardropPainter({required this.fill, required this.border});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final r = w / 2;
-    final cx = w / 2;
-    final center = Offset(cx, r);
-    final d = h - r; // circle centre → tip distance
-    final alpha = math.acos((r / d).clamp(-1.0, 1.0)); // tangent half-angle
-
-    final path = ui.Path()..moveTo(cx, h); // tip
-    // The two straight sides are tangent to the circle; the top is the major arc.
-    const down = math.pi / 2;
-    path.lineTo(cx + r * math.cos(down + alpha), r + r * math.sin(down + alpha));
-    path.arcTo(
-      Rect.fromCircle(center: center, radius: r),
-      down + alpha,
-      2 * math.pi - 2 * alpha,
-      false,
-    );
-    path.close();
-
-    _paintSoftShadow(canvas, path, spread: 2.4, alpha: 0.16);
-    canvas.drawPath(path, Paint()..color = fill);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = border
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.4,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_TeardropPainter old) =>
-      old.fill != fill || old.border != border;
-}
-
-/// A small record dot, shown in the middle zoom band where full teardrop pins
-/// would overlap. Same amber material as the pins — an amber fill with a
-/// deeper-orange rim — just reduced to a tidy circle centred on the record's
-/// point. Tapping it selects the record (which zooms in to its pin).
+/// The simplest possible marker for a record with no image to show: a small
+/// dot in [color] (the colour of the route leg it sits on), with a darker rim
+/// of the same hue. Used both for image-less records at full zoom and for
+/// every record in the middle zoom band, where full markers would overlap.
+/// Tapping it selects the record (which zooms in to its full marker).
 class _EntryDot extends StatelessWidget {
+  final Color color;
   final VoidCallback onTap;
 
-  const _EntryDot({required this.onTap});
+  const _EntryDot({required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      // RepaintBoundary for the same reason the teardrop uses one: cache each
-      // dot as its own layer so a pan/zoom just re-composites textures instead
-      // of re-painting every visible dot per frame.
+      // RepaintBoundary so a pan/zoom just re-composites each dot's cached
+      // texture instead of re-painting every visible dot per frame.
       child: RepaintBoundary(
         child: Container(
           width: 12,
           height: 12,
           decoration: BoxDecoration(
-            color: _recordFill,
+            color: color,
             shape: BoxShape.circle,
-            border: Border.all(color: _recordStroke, width: 1.4),
+            border: Border.all(color: _darken(color), width: 1.4),
           ),
         ),
       ),
