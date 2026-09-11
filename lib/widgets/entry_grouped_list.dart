@@ -51,6 +51,7 @@ class EntryGroupedList extends StatelessWidget {
                 fontWeight: FontWeight.bold, color: Colors.grey)),
       ));
       children.addAll(items.map((e) => EntryCard(
+            key: ValueKey(e.id),
             entry: e,
             onTap: onEntryTap == null ? null : () => onEntryTap!(e),
             selected: e.id == selectedEntryId,

@@ -200,7 +200,10 @@ class _CompanionDetail extends StatelessWidget {
               ? const Center(child: Text('还没有和 TA 一起的记录'))
               : ListView.builder(
                   itemCount: entries.length,
-                  itemBuilder: (_, i) => EntryCard(entry: entries[i]),
+                  itemBuilder: (_, i) => EntryCard(
+                    key: ValueKey(entries[i].id),
+                    entry: entries[i],
+                  ),
                 ),
         ),
       ],

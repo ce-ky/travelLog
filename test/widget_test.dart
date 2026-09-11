@@ -312,6 +312,55 @@ void main() {
     expect(yunnan.selected, isFalse);
   });
 
+  testWidgets('editing a record swaps it for a prefilled form and saves back',
+      (tester) async {
+    // The inline edit form (trip chips + body + time + location + type chips)
+    // is taller than one phone screen when it replaces a card in the list.
+    // Rather than chase a pixel-perfect scroll offset across the list's own
+    // Scrollable and the form's nested one (ensureVisible can leave a target
+    // sitting right on the viewport's clip edge, where it looks "visible" but
+    // doesn't actually receive the tap), just give this test a tall enough
+    // window that everything fits without scrolling.
+    final view =
+        TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher.implicitView!;
+    view.physicalSize = const Size(400, 3000);
+    view.devicePixelRatio = 1.0;
+
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('浏览'));
+    await tester.pumpAndSettle();
+    expect(find.text('关于旅行的意义'), findsOneWidget);
+
+    final card = find.ancestor(
+      of: find.text('关于旅行的意义'),
+      matching: find.byType(Card),
+    );
+    await tester.tap(find.descendant(
+      of: card,
+      matching: find.byIcon(Icons.edit_outlined),
+    ));
+    await tester.pumpAndSettle();
+
+    // The card swapped its display for an edit form, prefilled from the
+    // record — the essay type has no image field, just the body etc.
+    expect(find.text('编辑记录'), findsOneWidget);
+    expect(find.text('走得越远，越明白自己想留下的其实是那些说不清的瞬间……'),
+        findsOneWidget);
+
+    await tester.enterText(
+        find.widgetWithText(TextFormField, '说些什么：'), '更新后的随笔正文');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    // The form is gone and the card shows the updated body in its place.
+    expect(find.text('编辑记录'), findsNothing);
+    expect(find.text('更新后的随笔正文'), findsOneWidget);
+    expect(find.text('走得越远，越明白自己想留下的其实是那些说不清的瞬间……'),
+        findsNothing);
+  });
+
   testWidgets('browsing by companion shows places visited together',
       (tester) async {
     await tester.pumpWidget(app());

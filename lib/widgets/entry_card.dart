@@ -6,13 +6,18 @@ import 'package:provider/provider.dart';
 
 import '../models/entry.dart';
 import '../models/trip.dart';
+import '../screens/entry_form.dart';
 import '../state/app_state.dart';
 import 'entry_image.dart';
 
 /// One [Entry] rendered in the default [图+文] format: its images (up to four)
 /// above, then the body text, with the title shown only when one was set.
 /// Reused by every list view.
-class EntryCard extends StatelessWidget {
+///
+/// Tapping "编辑" swaps this display for [EntryForm] in place, prefilled from
+/// the entry and laid out per its field type; saving swaps back in the
+/// updated record.
+class EntryCard extends StatefulWidget {
   final Entry entry;
 
   /// When set, tapping the card runs this (e.g. the map zooms to the record).
@@ -31,74 +36,103 @@ class EntryCard extends StatelessWidget {
   });
 
   @override
+  State<EntryCard> createState() => _EntryCardState();
+}
+
+class _EntryCardState extends State<EntryCard> {
+  bool _editing = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final appState = context.read<AppState>();
-    final trip = appState.tripById(entry.tripId);
-    final dateStr = DateFormat('yyyy.MM.dd HH:mm').format(entry.timestamp);
-    final title = entry.explicitTitle;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       // The selected record picks up the same tinted container the selected
       // trip card uses, plus a primary outline, so it clearly reads as active.
-      color: selected ? theme.colorScheme.secondaryContainer : null,
-      shape: selected
+      color: widget.selected ? theme.colorScheme.secondaryContainer : null,
+      shape: widget.selected
           ? RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
               side: BorderSide(color: theme.colorScheme.primary, width: 1.5),
             )
           : null,
-      child: InkWell(
-        // A null onTap leaves the card inert (no ripple) — the same look the
-        // list views had before; only the map panel passes a handler.
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (entry.hasImage) ...[
-                _ImageStrip(paths: entry.imagePaths, glyph: entry.markerGlyph),
-                const SizedBox(height: 10),
-              ],
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Title is optional — only shown when the user set one.
-                        if (title != null) ...[
-                          Text(title,
-                              style: theme.textTheme.titleMedium,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 4),
-                        ],
-                        if (entry.body.isNotEmpty)
-                          Text(entry.body,
-                              maxLines: 4, overflow: TextOverflow.ellipsis),
-                        // With neither title nor body, keep the type as a heading
-                        // so the row never reads as empty.
-                        if (title == null && entry.body.isEmpty)
-                          Text(entry.type.label,
-                              style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        _MetaRow(entry: entry, trip: trip, dateStr: dateStr),
-                      ],
-                    ),
-                  ),
-                  _DeleteButton(
-                    onConfirm: () =>
-                        context.read<AppState>().removeEntry(entry.id),
-                  ),
-                ],
-              ),
+      child: _editing ? _buildEditor() : _buildDisplay(context, theme),
+    );
+  }
+
+  Widget _buildEditor() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: EntryForm(
+        initialEntry: widget.entry,
+        onSaved: (_) => setState(() => _editing = false),
+        onClose: () => setState(() => _editing = false),
+      ),
+    );
+  }
+
+  Widget _buildDisplay(BuildContext context, ThemeData theme) {
+    final entry = widget.entry;
+    final appState = context.read<AppState>();
+    final trip = appState.tripById(entry.tripId);
+    final dateStr = DateFormat('yyyy.MM.dd HH:mm').format(entry.timestamp);
+    final title = entry.explicitTitle;
+
+    return InkWell(
+      // A null onTap leaves the card inert (no ripple) — the same look the
+      // list views had before; only the map panel passes a handler.
+      onTap: widget.onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (entry.hasImage) ...[
+              _ImageStrip(paths: entry.imagePaths, glyph: entry.markerGlyph),
+              const SizedBox(height: 10),
             ],
-          ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title is optional — only shown when the user set one.
+                      if (title != null) ...[
+                        Text(title,
+                            style: theme.textTheme.titleMedium,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 4),
+                      ],
+                      if (entry.body.isNotEmpty)
+                        Text(entry.body,
+                            maxLines: 4, overflow: TextOverflow.ellipsis),
+                      // With neither title nor body, keep the type as a heading
+                      // so the row never reads as empty.
+                      if (title == null && entry.body.isEmpty)
+                        Text(entry.type.label,
+                            style: theme.textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      _MetaRow(entry: entry, trip: trip, dateStr: dateStr),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  tooltip: '编辑',
+                  onPressed: () => setState(() => _editing = true),
+                ),
+                _DeleteButton(
+                  onConfirm: () =>
+                      context.read<AppState>().removeEntry(entry.id),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
