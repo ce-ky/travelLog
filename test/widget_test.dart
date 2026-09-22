@@ -395,8 +395,9 @@ void main() {
     // Nothing is open yet, so the band isn't there.
     expect(find.byType(TripTimelineBar), findsNothing);
 
-    // Tap that trip's cluster on the map — the band only appears with a trip.
-    await tester.tap(find.text('京都之旅'));
+    // Tap that trip's cluster on the map — it reads as the trip's date range,
+    // and the band only appears once a trip is open.
+    await tester.tap(find.text('2025.4.3~4.8'));
     await tester.pumpAndSettle();
 
     final band = find.byType(TripTimelineBar);

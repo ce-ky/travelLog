@@ -61,7 +61,9 @@ Screens ──> AppState (ChangeNotifier) ──> TravelRepository (interface)
   below that, a tap just zooms in. Record pins are a uniform amber teardrop (and
   collapse to small amber dots at the mid-zoom band where full pins would
   overlap); trips are connected by a thin grey dashed route line and told apart
-  by their cluster colour when zoomed out.
+  by their cluster colour when zoomed out. A zoomed-out cluster bubble reads as
+  the trip's date range (`2025.4.3~4.8`, or `~至今` while it's still running) —
+  the trip's name is one tap away, in the records panel and the timeline.
 - **Trip timeline (`trip_timeline_bar.dart`)** — wide (web/desktop) layout only:
   opening a trip (cluster tap, or a pick in the 旅途 panel) puts a band along the
   bottom of the map listing that trip's records left-to-right in time order,

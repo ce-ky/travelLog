@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../models/entry.dart';
+import '../models/trip.dart';
 import '../state/app_state.dart';
 import '../widgets/entry_image.dart';
 import '../widgets/trip_records_panel.dart';
@@ -818,13 +819,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       for (final group in byTrip.entries)
                         Marker(
                           point: _centroid(group.value),
-                          width: 168,
+                          // Wide enough for the longest date range the bubble
+                          // can read — a trip that crosses new year, which
+                          // carries a year on both ends.
+                          width: 190,
                           height: 50,
                           alignment: Alignment.topCenter,
                           child: _HoverScale(
                             alignment: Alignment.bottomCenter,
                             child: _TripCluster(
-                              title: appState.tripById(group.key).title,
+                              dates: _tripDateRange(
+                                  appState.tripById(group.key)),
                               count: group.value.length,
                               color: _tripColor(group.key),
                               onTap: () => _openTripPanel(group.key,
@@ -1270,6 +1275,21 @@ Color _darken(Color color, [double amount = 0.25]) {
   return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
 }
 
+/// A trip's span as the cluster bubble reads it: `2025.4.3~4.8`. The year is
+/// written once unless the trip crosses into a new one (`2024.12.28~2025.1.3`),
+/// so the common case stays short enough for the bubble. A trip with no end
+/// date is still running — `2025.4.3~至今`.
+String _tripDateRange(Trip trip) {
+  final start = trip.startDate;
+  final end = trip.endDate;
+  final from = '${start.year}.${start.month}.${start.day}';
+  if (end == null) return '$from~至今';
+  final to = end.year != start.year
+      ? '${end.year}.${end.month}.${end.day}'
+      : '${end.month}.${end.day}';
+  return '$from~$to';
+}
+
 /// A stable colour per trip, so each trip's connecting line is distinguishable.
 Color _tripColor(String tripId) {
   final hue = (tripId.hashCode % 360).abs().toDouble();
@@ -1403,16 +1423,20 @@ LatLng _centroid(List<Entry> entries) {
   return LatLng(lat / entries.length, lng / entries.length);
 }
 
-/// The collapsed, zoomed-out marker for a whole trip: its name and record
-/// count in a bubble. Tapping it zooms in to reveal the individual records.
+/// The collapsed, zoomed-out marker for a whole trip: when it ran (see
+/// [_tripDateRange]) and how many records it holds, in a bubble. Tapping it
+/// zooms in to reveal the individual records.
 class _TripCluster extends StatelessWidget {
-  final String title;
+  /// The trip's date range — what the bubble reads at this zoom. The trip's
+  /// name is one tap away, in the records panel and the bottom timeline.
+  final String dates;
+
   final int count;
   final Color color;
   final VoidCallback onTap;
 
   const _TripCluster({
-    required this.title,
+    required this.dates,
     required this.count,
     required this.color,
     required this.onTap,
@@ -1438,7 +1462,7 @@ class _TripCluster extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 Flexible(
-                  child: Text(title,
+                  child: Text(dates,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
