@@ -13,6 +13,7 @@ import '../models/entry.dart';
 import '../state/app_state.dart';
 import '../widgets/entry_image.dart';
 import '../widgets/trip_records_panel.dart';
+import '../widgets/trip_timeline_bar.dart';
 import 'entry_form.dart';
 import 'new_trip_sheet.dart';
 import 'trip_detail_screen.dart';
@@ -418,6 +419,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// tapping its cluster bubble.
   String? _panelTripId;
 
+  /// Whether the bottom timeline band (see [TripTimelineBar]) is showing its
+  /// nodes rather than just its header strip. Reset to open with every trip.
+  bool _timelineExpanded = true;
+
   /// Below this width there's no room for a side panel; a trip tap navigates.
   static const double _panelBreakpoint = 720;
 
@@ -539,6 +544,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       setState(() {
         _addingPoint = null;
         _panelTripId = tripId;
+        _timelineExpanded = true;
       });
       _fitTrip(points);
     } else {
@@ -571,6 +577,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         !appState.trips.any((t) => t.id == _panelTripId)) {
       _panelTripId = null;
     }
+
+    // The bottom timeline band exists only on the wide (web/desktop) layout and
+    // only while a trip is open. Everything that normally sits at the bottom of
+    // the map — the settings button, the scale bar, the attribution — is lifted
+    // by exactly the band's footprint, so the band never covers them.
+    final wide = MediaQuery.sizeOf(context).width >= _panelBreakpoint;
+    final timelineOpen = wide && _panelTripId != null;
+    final bandHeight = _timelineExpanded
+        ? TripTimelineBar.expandedHeight
+        : TripTimelineBar.collapsedHeight;
+    // The band's own height, its 20 bottom margin and a 12 gap above it.
+    final bottomInset = timelineOpen ? bandHeight + 32 : 0.0;
 
     // If the selected entry was deleted/filtered out, drop the popup. The
     // notifier write is deferred out of build (mutating it here would mark the
@@ -931,7 +949,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             // base-map style, the place-name toggle and the route-line style.
             Positioned(
               left: 16,
-              bottom: 16,
+              bottom: 16 + bottomInset,
               child: _MapSettingsButton(onTap: _openSettings),
             ),
             // Interaction-tuning button — debug builds only. Opens live
@@ -941,7 +959,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             if (kDebugMode)
               Positioned(
                 left: 16,
-                bottom: 128,
+                bottom: 128 + bottomInset,
                 child: _MapTuningButton(onTap: _openTuningPanel),
               ),
             // Scale bar, tucked in just above the settings button in the
@@ -949,12 +967,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             // so it re-labels itself as the map is panned and zoomed.
             Positioned(
               left: 16,
-              bottom: 72,
+              bottom: 72 + bottomInset,
               child: _ScaleBar(controller: _map, dark: style.dark),
             ),
             Positioned(
               right: 8,
-              bottom: 6,
+              bottom: 6 + bottomInset,
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -980,10 +998,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
     // Wide window with a trip selected: the map keeps the whole window and the
     // trip's records float over it as a rounded card on the right — no docked
-    // pane or divider line. Tapping a record zooms the map to its location.
-    // Otherwise the map fills the view on its own.
-    final wide = MediaQuery.sizeOf(context).width >= _panelBreakpoint;
-    if (!wide || _panelTripId == null) return map;
+    // pane or divider line — while the trip's timeline runs along the bottom.
+    // Tapping a record (in either) zooms the map to its location. Otherwise the
+    // map fills the view on its own.
+    if (!timelineOpen) return map;
 
     return Stack(
       children: [
@@ -991,7 +1009,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         Positioned(
           top: 20,
           right: 20,
-          bottom: 20,
+          bottom: 20 + bandHeight + 12,
           width: 360,
           child: Material(
             elevation: 6,
@@ -1008,6 +1026,30 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 onRecordTap: _selectEntry,
                 selectedEntryId: selected?.id,
               ),
+            ),
+          ),
+        ),
+        // The trip's records as one left-to-right timeline along the bottom:
+        // the order things happened in, which the (newest-first) side list
+        // doesn't show. Same selection and same colours as the map's route.
+        Positioned(
+          left: 20,
+          right: 20,
+          bottom: 20,
+          height: bandHeight,
+          child: ValueListenableBuilder<Entry?>(
+            valueListenable: _selectedN,
+            builder: (context, selected, _) => TripTimelineBar(
+              tripId: _panelTripId!,
+              accent: _tripColor(_panelTripId!),
+              dayColor: (day, lastDay) =>
+                  _tripDayColor(_panelTripId!, day, lastDay),
+              onNodeTap: _selectEntry,
+              selectedEntryId: selected?.id,
+              expanded: _timelineExpanded,
+              onToggleExpanded: () =>
+                  setState(() => _timelineExpanded = !_timelineExpanded),
+              onClose: () => setState(() => _panelTripId = null),
             ),
           ),
         ),

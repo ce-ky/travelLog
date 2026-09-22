@@ -10,6 +10,7 @@ import 'package:travel_log/data/mock_travel_repository.dart';
 import 'package:travel_log/main.dart';
 import 'package:travel_log/screens/new_entry_sheet.dart';
 import 'package:travel_log/state/app_state.dart';
+import 'package:travel_log/widgets/trip_timeline_bar.dart';
 
 /// A 1x1 transparent PNG, so the map renders without touching the network.
 final _blankTile = Uint8List.fromList(const [
@@ -377,5 +378,44 @@ void main() {
 
     expect(find.text('在古城迷路的那晚'), findsOneWidget); // 云南漫游 record
     expect(find.text('鸭川边的午后'), findsNothing); // 京都之旅 record
+  });
+
+  testWidgets('desktop: opening a trip adds its timeline along the bottom',
+      (tester) async {
+    // The bottom timeline band is part of the wide (web/desktop) map shell, so
+    // this one test runs against a desktop-sized window.
+    TestWidgetsFlutterBinding.ensureInitialized()
+        .platformDispatcher
+        .implicitView!
+        .physicalSize = const Size(1280, 900);
+
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+
+    // Nothing is open yet, so the band isn't there.
+    expect(find.byType(TripTimelineBar), findsNothing);
+
+    // Tap that trip's cluster on the map — the band only appears with a trip.
+    await tester.tap(find.text('京都之旅'));
+    await tester.pumpAndSettle();
+
+    final band = find.byType(TripTimelineBar);
+    expect(band, findsOneWidget);
+    Finder inBand(String text) =>
+        find.descendant(of: band, matching: find.text(text));
+
+    // That trip's nodes, under a marker per day of the trip...
+    expect(inBand('第1天'), findsOneWidget);
+    expect(inBand('第3天'), findsOneWidget);
+    expect(inBand('伏见稻荷大社'), findsOneWidget);
+    expect(inBand('鸭川边的午后'), findsOneWidget);
+    // ...and nothing from the other trip.
+    expect(inBand('洱海速写'), findsNothing);
+
+    // Collapsing leaves the header strip and takes the nodes away.
+    await tester.tap(find.byTooltip('收起时间线'));
+    await tester.pumpAndSettle();
+    expect(band, findsOneWidget);
+    expect(inBand('伏见稻荷大社'), findsNothing);
   });
 }

@@ -62,6 +62,12 @@ Screens ──> AppState (ChangeNotifier) ──> TravelRepository (interface)
   collapse to small amber dots at the mid-zoom band where full pins would
   overlap); trips are connected by a thin grey dashed route line and told apart
   by their cluster colour when zoomed out.
+- **Trip timeline (`trip_timeline_bar.dart`)** — wide (web/desktop) layout only:
+  opening a trip (cluster tap, or a pick in the 旅途 panel) puts a band along the
+  bottom of the map listing that trip's records left-to-right in time order,
+  split by day and coloured with the same per-day route colours. It shares the
+  map's selection with the right-hand records panel, and the map's bottom-left
+  controls are lifted by exactly the band's height so nothing hides under it.
 - **Auto-trip assignment (`entry_form.dart`)** — a new record with a location
   auto-selects the trip whose nearest existing record is within
   `_autoSelectKm = 50` km; trip chips are ordered nearest-first.
@@ -139,7 +145,7 @@ lib/
 ├── models/   Entry, EntryType, Trip, Person, GeoPoint
 ├── screens/  auth_gate, home_shell, map / trips / browse, entry & trip forms, pickers
 ├── state/    AppState (ChangeNotifier)
-└── widgets/  entry_card, entry_image (reusable pieces)
+└── widgets/  entry_card, entry_image, trip_records_panel, trip_timeline_bar
 supabase/migrations/   0001 base schema + RLS, 0002 companions → trip level
 scripts/   supabase_keepalive.ps1 (local equivalent of the keepalive workflow)
 ```
