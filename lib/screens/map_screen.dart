@@ -10,9 +10,11 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../models/entry.dart';
+import '../models/trip.dart';
 import '../state/app_state.dart';
 import '../widgets/entry_image.dart';
 import '../widgets/trip_records_panel.dart';
+import '../widgets/trip_timeline_bar.dart';
 import 'entry_form.dart';
 import 'new_trip_sheet.dart';
 import 'trip_detail_screen.dart';
@@ -418,6 +420,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// tapping its cluster bubble.
   String? _panelTripId;
 
+  /// Whether the bottom timeline band (see [TripTimelineBar]) is showing its
+  /// nodes rather than just its header strip. Reset to open with every trip.
+  bool _timelineExpanded = true;
+
   /// Below this width there's no room for a side panel; a trip tap navigates.
   static const double _panelBreakpoint = 720;
 
@@ -539,6 +545,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       setState(() {
         _addingPoint = null;
         _panelTripId = tripId;
+        _timelineExpanded = true;
       });
       _fitTrip(points);
     } else {
@@ -571,6 +578,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         !appState.trips.any((t) => t.id == _panelTripId)) {
       _panelTripId = null;
     }
+
+    // The bottom timeline band exists only on the wide (web/desktop) layout and
+    // only while a trip is open. Everything that normally sits at the bottom of
+    // the map — the settings button, the scale bar, the attribution — is lifted
+    // by exactly the band's footprint, so the band never covers them.
+    final wide = MediaQuery.sizeOf(context).width >= _panelBreakpoint;
+    final timelineOpen = wide && _panelTripId != null;
+    final bandHeight = _timelineExpanded
+        ? TripTimelineBar.expandedHeight
+        : TripTimelineBar.collapsedHeight;
+    // The band's own height, its 20 bottom margin and a 12 gap above it.
+    final bottomInset = timelineOpen ? bandHeight + 32 : 0.0;
 
     // If the selected entry was deleted/filtered out, drop the popup. The
     // notifier write is deferred out of build (mutating it here would mark the
@@ -800,13 +819,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       for (final group in byTrip.entries)
                         Marker(
                           point: _centroid(group.value),
-                          width: 168,
+                          // Wide enough for the longest date range the bubble
+                          // can read — a trip that crosses new year, which
+                          // carries a year on both ends.
+                          width: 190,
                           height: 50,
                           alignment: Alignment.topCenter,
                           child: _HoverScale(
                             alignment: Alignment.bottomCenter,
                             child: _TripCluster(
-                              title: appState.tripById(group.key).title,
+                              dates: _tripDateRange(
+                                  appState.tripById(group.key)),
                               count: group.value.length,
                               color: _tripColor(group.key),
                               onTap: () => _openTripPanel(group.key,
@@ -931,7 +954,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             // base-map style, the place-name toggle and the route-line style.
             Positioned(
               left: 16,
-              bottom: 16,
+              bottom: 16 + bottomInset,
               child: _MapSettingsButton(onTap: _openSettings),
             ),
             // Interaction-tuning button — debug builds only. Opens live
@@ -941,7 +964,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             if (kDebugMode)
               Positioned(
                 left: 16,
-                bottom: 128,
+                bottom: 128 + bottomInset,
                 child: _MapTuningButton(onTap: _openTuningPanel),
               ),
             // Scale bar, tucked in just above the settings button in the
@@ -949,12 +972,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             // so it re-labels itself as the map is panned and zoomed.
             Positioned(
               left: 16,
-              bottom: 72,
+              bottom: 72 + bottomInset,
               child: _ScaleBar(controller: _map, dark: style.dark),
             ),
             Positioned(
               right: 8,
-              bottom: 6,
+              bottom: 6 + bottomInset,
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -980,10 +1003,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
     // Wide window with a trip selected: the map keeps the whole window and the
     // trip's records float over it as a rounded card on the right — no docked
-    // pane or divider line. Tapping a record zooms the map to its location.
-    // Otherwise the map fills the view on its own.
-    final wide = MediaQuery.sizeOf(context).width >= _panelBreakpoint;
-    if (!wide || _panelTripId == null) return map;
+    // pane or divider line — while the trip's timeline runs along the bottom.
+    // Tapping a record (in either) zooms the map to its location. Otherwise the
+    // map fills the view on its own.
+    if (!timelineOpen) return map;
 
     return Stack(
       children: [
@@ -991,7 +1014,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         Positioned(
           top: 20,
           right: 20,
-          bottom: 20,
+          bottom: 20 + bandHeight + 12,
           width: 360,
           child: Material(
             elevation: 6,
@@ -1008,6 +1031,30 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 onRecordTap: _selectEntry,
                 selectedEntryId: selected?.id,
               ),
+            ),
+          ),
+        ),
+        // The trip's records as one left-to-right timeline along the bottom:
+        // the order things happened in, which the (newest-first) side list
+        // doesn't show. Same selection and same colours as the map's route.
+        Positioned(
+          left: 20,
+          right: 20,
+          bottom: 20,
+          height: bandHeight,
+          child: ValueListenableBuilder<Entry?>(
+            valueListenable: _selectedN,
+            builder: (context, selected, _) => TripTimelineBar(
+              tripId: _panelTripId!,
+              accent: _tripColor(_panelTripId!),
+              dayColor: (day, lastDay) =>
+                  _tripDayColor(_panelTripId!, day, lastDay),
+              onNodeTap: _selectEntry,
+              selectedEntryId: selected?.id,
+              expanded: _timelineExpanded,
+              onToggleExpanded: () =>
+                  setState(() => _timelineExpanded = !_timelineExpanded),
+              onClose: () => setState(() => _panelTripId = null),
             ),
           ),
         ),
@@ -1228,6 +1275,21 @@ Color _darken(Color color, [double amount = 0.25]) {
   return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
 }
 
+/// A trip's span as the cluster bubble reads it: `2025.4.3~4.8`. The year is
+/// written once unless the trip crosses into a new one (`2024.12.28~2025.1.3`),
+/// so the common case stays short enough for the bubble. A trip with no end
+/// date is still running — `2025.4.3~至今`.
+String _tripDateRange(Trip trip) {
+  final start = trip.startDate;
+  final end = trip.endDate;
+  final from = '${start.year}.${start.month}.${start.day}';
+  if (end == null) return '$from~至今';
+  final to = end.year != start.year
+      ? '${end.year}.${end.month}.${end.day}'
+      : '${end.month}.${end.day}';
+  return '$from~$to';
+}
+
 /// A stable colour per trip, so each trip's connecting line is distinguishable.
 Color _tripColor(String tripId) {
   final hue = (tripId.hashCode % 360).abs().toDouble();
@@ -1361,16 +1423,20 @@ LatLng _centroid(List<Entry> entries) {
   return LatLng(lat / entries.length, lng / entries.length);
 }
 
-/// The collapsed, zoomed-out marker for a whole trip: its name and record
-/// count in a bubble. Tapping it zooms in to reveal the individual records.
+/// The collapsed, zoomed-out marker for a whole trip: when it ran (see
+/// [_tripDateRange]) and how many records it holds, in a bubble. Tapping it
+/// zooms in to reveal the individual records.
 class _TripCluster extends StatelessWidget {
-  final String title;
+  /// The trip's date range — what the bubble reads at this zoom. The trip's
+  /// name is one tap away, in the records panel and the bottom timeline.
+  final String dates;
+
   final int count;
   final Color color;
   final VoidCallback onTap;
 
   const _TripCluster({
-    required this.title,
+    required this.dates,
     required this.count,
     required this.color,
     required this.onTap,
@@ -1396,7 +1462,7 @@ class _TripCluster extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 Flexible(
-                  child: Text(title,
+                  child: Text(dates,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
