@@ -166,21 +166,22 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 #band .bh .ti { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 #band .bh .n { font-size: 11px; color: var(--hint); margin-left: 8px; white-space: nowrap; }
 #band .bh .sp { flex: 1; }
-#brow { flex: 1; overflow-x: auto; overflow-y: hidden; display: flex; align-items: flex-start; padding: 8px 12px 0; scrollbar-width: thin; }
-.cell { flex: none; display: flex; flex-direction: column; align-items: center; }
-.cell.node { border-radius: 10px; }
+#brow { flex: 1; overflow-x: auto; overflow-y: hidden; display: flex; scrollbar-width: thin; }
+.track { position: relative; flex: none; height: 100%; }
+.seg { position: absolute; height: var(--railW); margin-top: calc(var(--railW) / -2); }
+.tick { position: absolute; width: 1px; height: 6px; }
+.tickl { position: absolute; top: 6px; transform: translateX(-50%); font-size: 9px; color: var(--hint); opacity: .8; font-variant-numeric: tabular-nums; }
+.tday { position: absolute; top: 8px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; z-index: 1; }
+.tnode { position: absolute; top: 8px; display: flex; flex-direction: column; align-items: center; z-index: 2; }
+.dotrow { height: 36px; display: grid; place-items: center; }
+.tnode .tm { height: 16px; margin-top: 4px; font-size: var(--timeFs); color: var(--hint); line-height: 16px; font-variant-numeric: tabular-nums; }
+.tnode .lb { height: 34px; margin-top: 2px; padding: 0 2px; font-size: var(--nodeTitleFs); line-height: 1.25; text-align: center; color: var(--on-surface-variant); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tnode.sel .lb { font-weight: 700; color: var(--on-surface); }
+.tday .dd { height: 16px; margin-top: 4px; line-height: 16px; font-size: 11px; color: var(--hint); white-space: nowrap; }
 .hit { display: grid; place-items: center; width: var(--dotHit); height: var(--dotHit); border-radius: 50%; cursor: pointer; }
-.cell .tm { height: 16px; margin-top: 4px; font-size: var(--timeFs); color: var(--hint); line-height: 16px; font-variant-numeric: tabular-nums; }
-.rail { height: 36px; width: 100%; position: relative; display: grid; place-items: center; }
-.rail i { position: absolute; top: 50%; height: var(--railW); margin-top: calc(var(--railW) / -2); width: 50%; }
-.rail i.a { left: 0; } .rail i.b { right: 0; }
-.rail > b { position: relative; }
 .dot { display: block; border-radius: 50%; box-sizing: border-box; transition: width .15s, height .15s, transform .18s cubic-bezier(.2,.9,.3,1.4); }
 .hit:hover .dot { transform: scale(var(--dotHoverScale)); }
 .pill { padding: 3px 8px; border-radius: 9px; font-weight: 700; font-size: var(--dayPillFs); white-space: nowrap; }
-.cell .lb { height: 34px; margin-top: 2px; padding: 0 4px; font-size: var(--nodeTitleFs); line-height: 1.25; text-align: center; color: var(--on-surface-variant); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.cell.sel .lb { font-weight: 700; color: var(--on-surface); }
-.cell .dd { height: 34px; margin-top: 4px; line-height: 16px; font-size: 11px; color: var(--hint); }
 .empty { flex: 1; display: grid; place-items: center; color: var(--hint); }
 
 .toast { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); background: #323232; color: #fff; padding: 10px 16px; border-radius: 4px; font-size: 14px; z-index: 30; }
@@ -223,8 +224,8 @@ const PARAMS = [
   ['radius', '浮层圆角', 16, 0, 28, 1, 'BorderRadius.circular(16)', '布局'],
   ['bandH', '时间线展开高度', 148, 110, 240, 2, 'TripTimelineBar.expandedHeight', '底部时间线'],
   ['bandCollapsedH', '时间线收起高度 / 标题栏高', 44, 36, 60, 1, 'TripTimelineBar.collapsedHeight', '底部时间线'],
-  ['nodeW', '记录节点宽', 112, 72, 180, 2, '_nodeCell · SizedBox(width: 112)', '底部时间线'],
-  ['dayW', '日期节点宽', 78, 56, 120, 2, '_dayCell · SizedBox(width: 78)', '底部时间线'],
+  ['pxPerHour', '每小时宽度 (px)', 36, 8, 120, 1, '新增：按 24h 等比的时间轴（每天 = 24 × 该值）', '底部时间线'],
+  ['nodeW', '节点文字最大宽度', 112, 48, 180, 2, '_nodeCell · SizedBox(width: 112)；邻近节点会自动收窄', '底部时间线'],
   ['dotD', '节点圆点直径', 6, 3, 24, 1, '_nodeCell · d（原 26）', '底部时间线'],
   ['dotSelD', '选中圆点直径', 9, 4, 30, 1, '_nodeCell · d selected（原 32）', '底部时间线'],
   ['bubbleDur', '地图气泡弹出时长 (ms)', 320, 100, 800, 10, '新增：_ExpandedBubble 弹出动画', '地图气泡'],
@@ -267,6 +268,7 @@ const TOGGLES = [
   ['hoverLink', '移入圆点联动地图与右侧栏', true, '新增：移入圆点时地图平移、右侧栏滚动，使该记录居中；点击时两处同时展开选中'],
   ['panelFollow', '右侧栏跟随选中滚动', false, '现状：只有时间线会把选中项滚到中间，右侧栏不动'],
   ['bandShowTitle', '时间线标题栏显示左侧内容', false, '已去掉图标、「旅途名 · 时间线」和「N 个节点」，勾选可对比原样'],
+  ['hourTicks', '显示 6 / 12 / 18 点刻度', true, '新增：时间轴上的小时刻度'],
   ['bandFollow', '时间线跟随选中滚动', true, '现状：开启（Scrollable.ensureVisible alignment 0.5）'],
 ];
 
@@ -527,24 +529,47 @@ function cardHtml(e) {
 }
 function bandHtml(bandHeight, lastDay) {
   const acc = rgb(tripColor());
-  let cells = '';
-  const days = groupDays();
-  const specs = [];
-  Object.keys(days).map(Number).sort((a, b) => a - b).forEach(d => { specs.push([d, null]); days[d].forEach(e => specs.push([d, e])); });
-  specs.forEach(([d, e], i) => {
-    const c = dayColor(d, lastDay), first = i === 0, last = i === specs.length - 1;
-    const rail = inner => `<div class="rail"><i class="a" style="background:${first ? 'transparent' : rgb(c, P.railAlpha)}"></i><i class="b" style="background:${last ? 'transparent' : rgb(c, P.railAlpha)}"></i><b>${inner}</b></div>`;
-    if (!e) {
-      const f = days[d][0].ts;
-      cells += `<div class="cell" style="width:${P.dayW}px">${rail(`<span class="pill" style="background:${rgb(blend(c, .16))};border:1px solid ${rgb(blend(c, .55))};color:${rgb(readable(d, lastDay))}">${esc(S('dayPill', dv(d, f)))}</span>`)}<div class="dd">${esc(S('dayDate', dv(d, f)))}</div></div>`;
+  // A true time axis: every trip day is one 24h span of equal width, the day's
+  // pill sits on its midnight, and each record's dot sits at its clock time.
+  const PAD = 44, dayLen = 24 * P.pxPerHour;
+  const totalDays = dayIndex(TRIP.end);
+  const X = (d, h = 0) => PAD + (d - 1) * dayLen + h * P.pxPerHour;
+  const RAIL_Y = 26; // centre line of the rail within the track
+  let html = '';
+  // Rail: one segment per day, in that day's route colour.
+  for (let d = 1; d <= totalDays; d++) {
+    const c = dayColor(Math.min(d, lastDay), lastDay);
+    html += `<i class="seg" style="left:${X(d)}px;width:${dayLen}px;top:${RAIL_Y}px;background:${rgb(c, P.railAlpha)}"></i>`;
+    if (P.t_hourTicks) for (const h of [6, 12, 18]) {
+      html += `<i class="tick" style="left:${X(d, h)}px;top:${RAIL_Y - 3}px;background:${rgb(c, Math.min(1, P.railAlpha + .2))}"></i><span class="tickl" style="left:${X(d, h)}px">${h}</span>`;
+    }
+  }
+  // Items along the axis (midnight pills and record dots), used to keep each
+  // label from running into its neighbours.
+  const items = [];
+  for (let d = 1; d <= totalDays; d++) items.push({ x: X(d), day: d });
+  const sorted = [...entries].sort((a, b) => a.ts - b.ts);
+  for (const e of sorted) items.push({ x: X(dayIndex(e.ts), e.ts.getHours() + e.ts.getMinutes() / 60), e });
+  items.sort((a, b) => a.x - b.x);
+  items.forEach((it, i) => {
+    const gap = Math.min(i ? it.x - items[i - 1].x : Infinity, i < items.length - 1 ? items[i + 1].x - it.x : Infinity);
+    it.w = Math.max(40, Math.min(P.nodeW, gap - 4));
+  });
+  for (const it of items) {
+    if (it.day) {
+      const d = it.day, c = dayColor(Math.min(d, lastDay), lastDay);
+      const f = new Date(TRIP.start.getFullYear(), TRIP.start.getMonth(), TRIP.start.getDate() + d - 1);
+      html += `<div class="tday" style="left:${it.x}px"><div class="dotrow"><span class="pill" style="background:${rgb(blend(c, .16))};border:1px solid ${rgb(blend(c, .55))};color:${rgb(readable(Math.min(d, lastDay), lastDay))}">${esc(S('dayPill', dv(d, f)))}</span></div><div class="dd">${esc(S('dayDate', dv(d, f)))}</div></div>`;
     } else {
+      const e = it.e, d = dayIndex(e.ts), c = dayColor(d, lastDay);
       const s = e.id === sel, dd = s ? P.dotSelD : P.dotD;
-      cells += `<div class="cell node ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="width:${P.nodeW}px">
-        ${rail(`<span class="hit"><span class="dot" style="width:${dd}px;height:${dd}px;background:${rgb(c)};border:${s ? 1.5 : 1}px solid var(--surface);${s ? `box-shadow:0 0 0 1px ${rgb(c)}, 0 0 5px 1px ${rgb(c, .45)};` : ''}"></span></span>`)}
+      html += `<div class="tnode ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="left:${it.x - it.w / 2}px;width:${it.w}px">
+        <div class="dotrow"><span class="hit"><span class="dot" style="width:${dd}px;height:${dd}px;background:${rgb(c)};border:${s ? 1.5 : 1}px solid var(--surface);${s ? `box-shadow:0 0 0 1px ${rgb(c)}, 0 0 5px 1px ${rgb(c, .45)};` : ''}"></span></span></div>
         <div class="tm">${pad(e.ts.getHours())}:${pad(e.ts.getMinutes())}</div>
         <div class="lb">${esc(displayTitle(e))}</div></div>`;
     }
-  });
+  }
+  const cells = `<div class="track" style="width:${X(totalDays + 1) + PAD}px">${html}</div>`;
   return `<section id="band" class="card-float" style="left:${P.margin}px;right:${P.margin}px;bottom:${P.margin}px;height:${bandHeight}px">
     <div class="bh">${P.t_bandShowTitle ? `<span class="ms ic" style="color:${acc}">timeline</span><span class="ti">${esc(S('bandTitle', { trip: TRIP.title }))}</span>
       <span class="n">${esc(S('bandCount', { n: entries.length }))}</span>` : ''}<span class="sp"></span>
