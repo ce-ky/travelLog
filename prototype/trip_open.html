@@ -101,7 +101,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .mk-thumb .ph { height: 44px; border-radius: 6px; display: grid; place-items: center; font-size: 18px; }
 .mk-thumb .t { font-size: 10.5px; font-weight: 600; color: rgba(0,0,0,.87); text-align: center; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bubble { position: absolute; width: 250px; margin-left: -125px; z-index: 5; }
-.bubble .frost { overflow: visible; }
+.bubble .frost { overflow: visible; transform-origin: 50% calc(100% + 10px); }
+/* Pop-in when a record becomes selected: grows out of its map point (the tail tip). */
+.bubble.pop .frost { animation: bubblePop var(--bubbleDur) cubic-bezier(.2,.9,.3,1.25) var(--bubbleDelay) both; }
+@keyframes bubblePop { from { opacity: 0; transform: translateY(8px) scale(.4); } to { opacity: 1; transform: none; } }
 .bubble .inner { border-radius: 8px; overflow: hidden; }
 .bubble .ph { height: 120px; display: grid; place-items: center; font-size: 34px; position: relative; }
 .bubble .cnt { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.54); color: #fff; border-radius: 10px; padding: 2px 6px; font-size: 11px; display: flex; align-items: center; gap: 3px; }
@@ -224,6 +227,8 @@ const PARAMS = [
   ['dayW', '日期节点宽', 78, 56, 120, 2, '_dayCell · SizedBox(width: 78)', '底部时间线'],
   ['dotD', '节点圆点直径', 6, 3, 24, 1, '_nodeCell · d（原 26）', '底部时间线'],
   ['dotSelD', '选中圆点直径', 9, 4, 30, 1, '_nodeCell · d selected（原 32）', '底部时间线'],
+  ['bubbleDur', '地图气泡弹出时长 (ms)', 320, 100, 800, 10, '新增：_ExpandedBubble 弹出动画', '地图气泡'],
+  ['bubbleDelay', '气泡弹出延迟 (ms)', 180, 0, 600, 10, '新增：等地图开始平移后再弹出', '地图气泡'],
   ['dotHit', '圆点悬浮感应范围', 22, 8, 40, 1, '新增：dot 周边的 hover/点击热区', '底部时间线'],
   ['dotHoverScale', '鼠标移入放大倍数', 1.8, 1, 3, 0.1, '新增：hover 放大动画', '底部时间线'],
   ['nodeTitleFs', '节点标题字号', 12, 10, 16, 0.5, '_nodeCell · fontSize: 12', '底部时间线'],
@@ -342,6 +347,7 @@ let W = 1280, H = 800;
 const $ = s => document.querySelector(s);
 const app = $('#app'), overlay = $('#overlay'), svg = $('#mapSvg'), world = $('#world'), marks = $('#marks');
 let proj = null, cam = [0, 0], hoverId = null, hoverTimer = null;
+let poppedId = null; // the selection whose bubble already played its pop-in
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* ======================= frame sizing ======================= */
@@ -428,6 +434,8 @@ function render() {
   r.setProperty('--cardBodyLines', P.cardBodyLines);
   r.setProperty('--dotHoverScale', P.dotHoverScale);
   r.setProperty('--dotHit', P.dotHit + 'px');
+  r.setProperty('--bubbleDur', P.bubbleDur + 'ms');
+  r.setProperty('--bubbleDelay', P.bubbleDelay + 'ms');
 
   const { p, lastDay } = renderMap();
   proj = p;
@@ -447,9 +455,11 @@ function render() {
     }
   }
   const se = entries.find(e => e.id === sel);
+  if (!se) poppedId = null;
   if (se) {
     const [x, y] = p(se.lat, se.lng);
-    h += `<div class="bubble" style="left:${x}px;top:${y}px;transform:translateY(calc(-100% - 12px))"><div class="frost"><div class="inner">
+    const pop = poppedId !== se.id; poppedId = se.id;
+    h += `<div class="bubble${pop ? ' pop' : ''}" style="left:${x}px;top:${y}px;transform:translateY(calc(-100% - 12px))"><div class="frost"><div class="inner">
       ${se.imgs ? `<div class="ph" style="background:${photoBg(se)}">${se.g}${se.imgs > 1 ? `<span class="cnt"><span class="ms">photo_library</span>${se.imgs}</span>` : ''}</div>` : ''}
       <div class="bd"><div class="hd"><span class="g">${se.g}</span><span class="tt">${esc(displayTitle(se))}</span><button data-act="desel" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
       <div class="pl">📍 ${esc(se.place)}</div>${se.body ? `<div class="bo">${esc(se.body)}</div>` : ''}</div></div></div></div>`;
