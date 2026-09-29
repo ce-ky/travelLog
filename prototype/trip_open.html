@@ -307,6 +307,10 @@ function hsl(h, s, l) {
   return [f(0), f(8), f(4)].map(x => Math.round(x * 255));
 }
 const rgb = (c, a = 1) => a === 1 ? `rgb(${c})` : `rgba(${c},${a})`;
+// Pre-mixed onto the panel surface (like Color.alphaBlend), so a day pill is
+// fully opaque and the rail doesn't show through it.
+const SURFACE = [245, 251, 247];
+const blend = (c, a) => c.map((v, i) => Math.round(v * a + SURFACE[i] * (1 - a)));
 const tripColor = () => hsl(P.tripHue, .55, .45);
 function dayColor(day, lastDay) {
   if (lastDay <= 1) return tripColor();
@@ -507,7 +511,7 @@ function bandHtml(bandHeight, lastDay) {
     const rail = inner => `<div class="rail"><i class="a" style="background:${first ? 'transparent' : rgb(c, P.railAlpha)}"></i><i class="b" style="background:${last ? 'transparent' : rgb(c, P.railAlpha)}"></i><b>${inner}</b></div>`;
     if (!e) {
       const f = days[d][0].ts;
-      cells += `<div class="cell" style="width:${P.dayW}px"><div style="height:16px"></div>${rail(`<span class="pill" style="background:${rgb(c, .16)};border:1px solid ${rgb(c, .55)};color:${rgb(readable(d, lastDay))}">${esc(S('dayPill', dv(d, f)))}</span>`)}<div class="dd">${esc(S('dayDate', dv(d, f)))}</div></div>`;
+      cells += `<div class="cell" style="width:${P.dayW}px"><div style="height:16px"></div>${rail(`<span class="pill" style="background:${rgb(blend(c, .16))};border:1px solid ${rgb(blend(c, .55))};color:${rgb(readable(d, lastDay))}">${esc(S('dayPill', dv(d, f)))}</span>`)}<div class="dd">${esc(S('dayDate', dv(d, f)))}</div></div>`;
     } else {
       const s = e.id === sel, dd = s ? P.dotSelD : P.dotD;
       cells += `<div class="cell node ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="width:${P.nodeW}px">
