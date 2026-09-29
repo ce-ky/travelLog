@@ -255,7 +255,7 @@ const STRINGS = [
 ];
 const TOGGLES = [
   ['panelFollow', '右侧栏跟随选中滚动', false, '现状：只有时间线会把选中项滚到中间，右侧栏不动'],
-  ['bandShowTitle', '时间线显示标题', false, '已按你的要求去掉「京都之旅 · 时间线」，勾选可对比原样'],
+  ['bandShowTitle', '时间线标题栏显示左侧内容', false, '已去掉图标、「旅途名 · 时间线」和「N 个节点」，勾选可对比原样'],
   ['bandFollow', '时间线跟随选中滚动', true, '现状：开启（Scrollable.ensureVisible alignment 0.5）'],
 ];
 
@@ -517,8 +517,8 @@ function bandHtml(bandHeight, lastDay) {
     }
   });
   return `<section id="band" class="card-float" style="left:${P.margin}px;right:${P.margin}px;bottom:${P.margin}px;height:${bandHeight}px">
-    <div class="bh"><span class="ms ic" style="color:${acc}">timeline</span>${P.t_bandShowTitle ? `<span class="ti">${esc(S('bandTitle', { trip: TRIP.title }))}</span>` : ''}
-      <span class="n" style="${P.t_bandShowTitle ? '' : 'margin-left:0'}">${esc(S('bandCount', { n: entries.length }))}</span><span class="sp"></span>
+    <div class="bh">${P.t_bandShowTitle ? `<span class="ms ic" style="color:${acc}">timeline</span><span class="ti">${esc(S('bandTitle', { trip: TRIP.title }))}</span>
+      <span class="n">${esc(S('bandCount', { n: entries.length }))}</span>` : ''}<span class="sp"></span>
       <button class="ibtn cmp" data-act="toggleBand" title="${esc(expanded ? S('collapse') : S('expand'))}"><span class="ms">${expanded ? 'keyboard_arrow_down' : 'keyboard_arrow_up'}</span></button>
       <button class="ibtn cmp" data-act="closeTrip" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
     ${expanded ? `<div class="hair"></div>${entries.length ? `<div id="brow">${cells}</div>` : `<div class="empty">${esc(S('bandEmpty'))}</div>`}` : ''}</section>`;
