@@ -220,8 +220,8 @@ const PARAMS = [
   ['bandCollapsedH', '时间线收起高度 / 标题栏高', 44, 36, 60, 1, 'TripTimelineBar.collapsedHeight', '底部时间线'],
   ['nodeW', '记录节点宽', 112, 72, 180, 2, '_nodeCell · SizedBox(width: 112)', '底部时间线'],
   ['dayW', '日期节点宽', 78, 56, 120, 2, '_dayCell · SizedBox(width: 78)', '底部时间线'],
-  ['dotD', '节点圆点直径', 10, 4, 24, 1, '_nodeCell · d（原 26）', '底部时间线'],
-  ['dotSelD', '选中圆点直径', 14, 6, 30, 1, '_nodeCell · d selected（原 32）', '底部时间线'],
+  ['dotD', '节点圆点直径', 6, 3, 24, 1, '_nodeCell · d（原 26）', '底部时间线'],
+  ['dotSelD', '选中圆点直径', 9, 4, 30, 1, '_nodeCell · d selected（原 32）', '底部时间线'],
   ['dotHoverScale', '鼠标移入放大倍数', 1.8, 1, 3, 0.1, '新增：hover 放大动画', '底部时间线'],
   ['nodeTitleFs', '节点标题字号', 12, 10, 16, 0.5, '_nodeCell · fontSize: 12', '底部时间线'],
   ['timeFs', '时间字号', 11, 9, 14, 0.5, '_nodeCell · HH:mm fontSize: 11', '底部时间线'],
@@ -270,8 +270,8 @@ const STORE = 'travellog-proto-v1';
 try { const saved = JSON.parse(localStorage.getItem(STORE) || '{}'); // Old defaults saved by v1 of this page yield to the new ones.
   if (saved.s_dayPill === '第{n}天') delete saved.s_dayPill;
   if (saved.s_dayDate === '{m}月{d}日') delete saved.s_dayDate;
-  if (saved.dotD === 26) delete saved.dotD;
-  if (saved.dotSelD === 32) delete saved.dotSelD;
+  if ([26, 10].includes(saved.dotD)) delete saved.dotD;
+  if ([32, 14].includes(saved.dotSelD)) delete saved.dotSelD;
   for (const k in saved) if (k in DEF) P[k] = saved[k]; } catch (e) {}
 function save() { try { localStorage.setItem(STORE, JSON.stringify(P)); } catch (e) {} }
 const S = (k, vars = {}) => String(P['s_' + k]).replace(/\{(\w+)\}/g, (m, v) => v in vars ? vars[v] : m);
@@ -520,7 +520,7 @@ function bandHtml(bandHeight, lastDay) {
     } else {
       const s = e.id === sel, dd = s ? P.dotSelD : P.dotD;
       cells += `<div class="cell node ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="width:${P.nodeW}px">
-        ${rail(`<span class="dot" style="width:${dd}px;height:${dd}px;background:${rgb(c)};border:${s ? 2 : 1.5}px solid var(--surface);${s ? `box-shadow:0 0 0 1.5px ${rgb(c)}, 0 0 6px 1px ${rgb(c, .5)};` : ''}"></span>`)}
+        ${rail(`<span class="dot" style="width:${dd}px;height:${dd}px;background:${rgb(c)};border:${s ? 1.5 : 1}px solid var(--surface);${s ? `box-shadow:0 0 0 1px ${rgb(c)}, 0 0 5px 1px ${rgb(c, .45)};` : ''}"></span>`)}
         <div class="tm">${pad(e.ts.getHours())}:${pad(e.ts.getMinutes())}</div>
         <div class="lb">${esc(displayTitle(e))}</div></div>`;
     }
