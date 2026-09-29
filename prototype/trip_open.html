@@ -174,9 +174,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .tday { position: absolute; top: 8px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; z-index: 1; }
 .tnode { position: absolute; top: 8px; display: flex; flex-direction: column; align-items: center; z-index: 2; }
 .dotrow { height: 36px; display: grid; place-items: center; }
-.tnode .tm { height: 16px; margin-top: 4px; font-size: var(--timeFs); color: var(--hint); line-height: 16px; font-variant-numeric: tabular-nums; }
-.tnode .lb { height: 34px; margin-top: 2px; padding: 0 2px; font-size: var(--nodeTitleFs); line-height: 1.25; text-align: center; color: var(--on-surface-variant); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.tnode.sel .lb { font-weight: 700; color: var(--on-surface); }
+/* Hover tooltip for a timeline dot: the record's time and title, shown only
+   while the pointer is on the dot. Lives above the band so it is never clipped. */
+#tip { position: absolute; z-index: 20; pointer-events: none; transform: translate(-50%, calc(-100% - 10px)); }
+#tip .frost { padding: 6px 10px 7px; max-width: var(--tipMaxW); animation: tipIn .14s ease-out both; }
+#tip .tm { font-size: var(--timeFs); color: var(--hint); font-variant-numeric: tabular-nums; line-height: 1.3; }
+#tip .lb { font-size: var(--nodeTitleFs); font-weight: 600; color: var(--on-surface); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@keyframes tipIn { from { opacity: 0; transform: translateY(4px) scale(.94); } to { opacity: 1; transform: none; } }
 .tday .dd { height: 16px; margin-top: 4px; line-height: 16px; font-size: 11px; color: var(--hint); white-space: nowrap; }
 .hit { display: grid; place-items: center; width: var(--dotHit); height: var(--dotHit); border-radius: 50%; cursor: pointer; }
 .dot { display: block; border-radius: 50%; box-sizing: border-box; transition: width .15s, height .15s, transform .18s cubic-bezier(.2,.9,.3,1.4); }
@@ -210,6 +214,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     <div id="app">
       <div id="world"><svg id="mapSvg" aria-hidden="true"></svg><div id="marks"></div></div>
       <div id="overlay"></div>
+      <div id="tip" hidden></div>
     </div>
   </main>
 </div>
@@ -222,10 +227,10 @@ const PARAMS = [
   ['margin', '浮层外边距', 20, 8, 40, 1, 'map_screen.dart · top/right/bottom: 20', '布局'],
   ['gap', '右侧栏与时间线间距', 12, 0, 32, 1, 'map_screen.dart · bandHeight + 12', '布局'],
   ['radius', '浮层圆角', 16, 0, 28, 1, 'BorderRadius.circular(16)', '布局'],
-  ['bandH', '时间线展开高度', 148, 110, 240, 2, 'TripTimelineBar.expandedHeight', '底部时间线'],
+  ['bandH', '时间线展开高度', 112, 80, 240, 2, 'TripTimelineBar.expandedHeight', '底部时间线'],
   ['bandCollapsedH', '时间线收起高度 / 标题栏高', 44, 36, 60, 1, 'TripTimelineBar.collapsedHeight', '底部时间线'],
   ['pxPerHour', '每小时宽度 (px)', 36, 8, 120, 1, '新增：按 24h 等比的时间轴（每天 = 24 × 该值）', '底部时间线'],
-  ['nodeW', '节点文字最大宽度', 112, 48, 180, 2, '_nodeCell · SizedBox(width: 112)；邻近节点会自动收窄', '底部时间线'],
+  ['tipMaxW', '悬浮气泡最大宽度', 180, 100, 320, 4, '新增：dot 悬浮气泡（时间 + 标题）', '底部时间线'],
   ['dotD', '节点圆点直径', 6, 3, 24, 1, '_nodeCell · d（原 26）', '底部时间线'],
   ['dotSelD', '选中圆点直径', 9, 4, 30, 1, '_nodeCell · d selected（原 32）', '底部时间线'],
   ['bubbleDur', '地图气泡弹出时长 (ms)', 320, 100, 800, 10, '新增：_ExpandedBubble 弹出动画', '地图气泡'],
@@ -253,6 +258,7 @@ const STRINGS = [
   // [key, label, default, placeholders]
   ['bandTitle', '时间线标题', '{trip} · 时间线', '{trip}'],
   ['bandCount', '节点计数', '{n} 个节点', '{n}'],
+  ['tipTime', '悬浮气泡时间行', '{time}', '{time} {date}'],
   ['bandEmpty', '时间线空状态', '这趟旅途还没有记录', ''],
   ['collapse', '收起按钮提示', '收起时间线', ''],
   ['expand', '展开按钮提示', '展开时间线', ''],
@@ -282,6 +288,7 @@ try { const saved = JSON.parse(localStorage.getItem(STORE) || '{}'); // Old defa
   if (saved.s_dayPill === '第{n}天') delete saved.s_dayPill;
   if (saved.s_dayDate === '{m}月{d}日') delete saved.s_dayDate;
   if ([26, 10].includes(saved.dotD)) delete saved.dotD;
+  if (saved.bandH === 148) delete saved.bandH;
   if ([32, 14].includes(saved.dotSelD)) delete saved.dotSelD;
   for (const k in saved) if (k in DEF) P[k] = saved[k]; } catch (e) {}
 function save() { try { localStorage.setItem(STORE, JSON.stringify(P)); } catch (e) {} }
@@ -349,6 +356,7 @@ let W = 1280, H = 800;
 const $ = s => document.querySelector(s);
 const app = $('#app'), overlay = $('#overlay'), svg = $('#mapSvg'), world = $('#world'), marks = $('#marks');
 let proj = null, cam = [0, 0], hoverId = null, hoverTimer = null;
+let appScale = 1;
 let poppedId = null; // the selection whose bubble already played its pop-in
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -364,6 +372,7 @@ function layoutFrame() {
   W = Math.round(w); H = Math.round(h);
   app.style.width = W + 'px'; app.style.height = H + 'px';
   app.style.transform = `scale(${scale})`;
+  appScale = scale;
   app.style.left = Math.max(0, (st.width - W * scale) / 2) + 'px';
   app.style.top = Math.max(0, (st.height - H * scale) / 2) + 'px';
 }
@@ -429,6 +438,7 @@ function groupDays() {
 
 /* ======================= overlay (markers, chrome, panels) ======================= */
 function render() {
+  hideTip();
   const bodyScroll = $('#plist')?.scrollTop, bandScroll = $('#brow')?.scrollLeft;
   const r = document.documentElement.style;
   ['radius', 'panelTitleFs', 'panelSubFs', 'dayHeaderFs', 'cardTitleFs', 'cardBodyFs', 'nodeTitleFs', 'timeFs', 'dayPillFs', 'railW', 'bandCollapsedH']
@@ -436,6 +446,7 @@ function render() {
   r.setProperty('--cardBodyLines', P.cardBodyLines);
   r.setProperty('--dotHoverScale', P.dotHoverScale);
   r.setProperty('--dotHit', P.dotHit + 'px');
+  r.setProperty('--tipMaxW', P.tipMaxW + 'px');
   r.setProperty('--bubbleDur', P.bubbleDur + 'ms');
   r.setProperty('--bubbleDelay', P.bubbleDelay + 'ms');
 
@@ -551,10 +562,6 @@ function bandHtml(bandHeight, lastDay) {
   const sorted = [...entries].sort((a, b) => a.ts - b.ts);
   for (const e of sorted) items.push({ x: X(dayIndex(e.ts), e.ts.getHours() + e.ts.getMinutes() / 60), e });
   items.sort((a, b) => a.x - b.x);
-  items.forEach((it, i) => {
-    const gap = Math.min(i ? it.x - items[i - 1].x : Infinity, i < items.length - 1 ? items[i + 1].x - it.x : Infinity);
-    it.w = Math.max(40, Math.min(P.nodeW, gap - 4));
-  });
   for (const it of items) {
     if (it.day) {
       const d = it.day, c = dayColor(Math.min(d, lastDay), lastDay);
@@ -563,10 +570,8 @@ function bandHtml(bandHeight, lastDay) {
     } else {
       const e = it.e, d = dayIndex(e.ts), c = dayColor(d, lastDay);
       const s = e.id === sel, dd = s ? P.dotSelD : P.dotD;
-      html += `<div class="tnode ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="left:${it.x - it.w / 2}px;width:${it.w}px">
-        <div class="dotrow"><span class="hit"><span class="dot" style="width:${dd}px;height:${dd}px;background:${rgb(c)};border:${s ? 1.5 : 1}px solid var(--surface);${s ? `box-shadow:0 0 0 1px ${rgb(c)}, 0 0 5px 1px ${rgb(c, .45)};` : ''}"></span></span></div>
-        <div class="tm">${pad(e.ts.getHours())}:${pad(e.ts.getMinutes())}</div>
-        <div class="lb">${esc(displayTitle(e))}</div></div>`;
+      html += `<div class="tnode ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="left:${it.x - P.dotHit / 2}px;width:${P.dotHit}px">
+        <div class="dotrow"><span class="hit"><span class="dot" style="width:${dd}px;height:${dd}px;background:${rgb(c)};border:${s ? 1.5 : 1}px solid var(--surface);${s ? `box-shadow:0 0 0 1px ${rgb(c)}, 0 0 5px 1px ${rgb(c, .45)};` : ''}"></span></span></div></div>`;
     }
   }
   const cells = `<div class="track" style="width:${X(totalDays + 1) + PAD}px">${html}</div>`;
@@ -619,11 +624,24 @@ function toast(msg) {
 // Hovering a timeline dot (its hit ring, not the text) previews that record:
 // the map pans to it and the records panel scrolls to it. A short delay keeps a
 // quick sweep across the band from yanking both views back and forth.
+function showTip(hit, id) {
+  const tip = $('#tip'), e = entries.find(x => x.id === id);
+  if (!hit || !e) { tip.hidden = true; return; }
+  const a = app.getBoundingClientRect(), r = hit.getBoundingClientRect();
+  tip.style.left = ((r.left + r.width / 2 - a.left) / appScale) + 'px';
+  tip.style.top = ((r.top - a.top) / appScale) + 'px';
+  tip.innerHTML = `<div class="frost"><div class="tm">${esc(S('tipTime', { date: `${pad(e.ts.getMonth() + 1)}-${pad(e.ts.getDate())}`, time: `${pad(e.ts.getHours())}:${pad(e.ts.getMinutes())}` }))}</div><div class="lb">${esc(displayTitle(e))}</div></div>`;
+  tip.hidden = false;
+}
+const hideTip = () => { $('#tip').hidden = true; hoverId = null; };
+// Only the band scrolling moves the dot out from under its tooltip.
+app.addEventListener('scroll', ev => { if (ev.target.id === 'brow') hideTip(); }, true);
 app.addEventListener('mouseover', ev => {
   const hit = ev.target.closest('.hit');
   const id = hit ? hit.closest('[data-node]').dataset.node : null;
   if (id === hoverId) return;
   hoverId = id; clearTimeout(hoverTimer);
+  showTip(hit, id);
   if (id && P.t_hoverLink) hoverTimer = setTimeout(() => { centerMap(id); centerPanel(id); }, 90);
 });
 app.addEventListener('click', ev => {
