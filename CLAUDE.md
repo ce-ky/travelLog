@@ -58,18 +58,21 @@ Screens ──> AppState (ChangeNotifier) ──> TravelRepository (interface)
 - **Map (`map_screen.dart`)** collapses markers into per-trip **clusters** when
   zoomed out (below `_recordZoom`) and shows individual records when zoomed in.
   Tapping empty space at street zoom (`_addZoom`) starts a new record there;
-  below that, a tap just zooms in. Record pins are a uniform amber teardrop (and
-  collapse to small amber dots at the mid-zoom band where full pins would
-  overlap); trips are connected by a thin grey dashed route line and told apart
-  by their cluster colour when zoomed out. A zoomed-out cluster bubble reads as
-  the trip's date range (`2025.4.3~4.8`, or `~至今` while it's still running) —
-  the trip's name is one tap away, in the records panel and the timeline.
+  below that, a tap just zooms in. Every record is the same small dot in its
+  route leg's colour (no photo thumbnails on the map); hovering a dot springs it
+  up, and selecting one pops its bubble out of the map point. Trips' daily legs
+  are joined by route lines and told apart by their cluster colour when zoomed
+  out. A zoomed-out cluster bubble reads as the trip's date range
+  (`2025.4.3~4.8`, or `~至今` while it's still running) — the trip's name is one
+  tap away, in the records panel.
 - **Trip timeline (`trip_timeline_bar.dart`)** — wide (web/desktop) layout only:
   opening a trip (cluster tap, or a pick in the 旅途 panel) puts a band along the
-  bottom of the map listing that trip's records left-to-right in time order,
-  split by day and coloured with the same per-day route colours. It shares the
-  map's selection with the right-hand records panel, and the map's bottom-left
-  controls are lifted by exactly the band's height so nothing hides under it.
+  bottom of the map. It is a true time axis: each trip day is an equal 24-hour
+  span with its `MM-dd` pill on midnight, and each record is a tiny dot at its
+  clock time (time + title only in the dot's hover tooltip). Hovering a dot
+  highlights its map dot, pans the map and scrolls the records panel to it
+  (centred in the area the panels leave uncovered); tapping selects it. The
+  map's bottom-left controls are lifted by exactly the band's height.
 - **Auto-trip assignment (`entry_form.dart`)** — a new record with a location
   auto-selects the trip whose nearest existing record is within
   `_autoSelectKm = 50` km; trip chips are ordered nearest-first.

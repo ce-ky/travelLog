@@ -404,19 +404,32 @@ void main() {
     expect(band, findsOneWidget);
     Finder inBand(String text) =>
         find.descendant(of: band, matching: find.text(text));
+    // A record is a bare dot on the axis; its time and title live only in the
+    // dot's hover tooltip.
+    Finder dotFor(String title) => find.descendant(
+          of: band,
+          matching: find.byWidgetPredicate((w) =>
+              w is Tooltip &&
+              (w.richMessage?.toPlainText().contains(title) ?? false)),
+        );
 
-    // That trip's nodes, under a marker per day of the trip...
+    // Every day of the trip (4/3–4/8) has its midnight pill and 第N天 label...
+    expect(inBand('04-03'), findsOneWidget);
+    expect(inBand('04-08'), findsOneWidget);
     expect(inBand('第1天'), findsOneWidget);
     expect(inBand('第3天'), findsOneWidget);
-    expect(inBand('伏见稻荷大社'), findsOneWidget);
-    expect(inBand('鸭川边的午后'), findsOneWidget);
+    // ...the titles aren't printed on the band itself...
+    expect(inBand('伏见稻荷大社'), findsNothing);
+    // ...each of the trip's records is a dot, carrying its time and title...
+    expect(dotFor('09:30\n伏见稻荷大社'), findsOneWidget);
+    expect(dotFor('鸭川边的午后'), findsOneWidget);
     // ...and nothing from the other trip.
-    expect(inBand('洱海速写'), findsNothing);
+    expect(dotFor('洱海速写'), findsNothing);
 
-    // Collapsing leaves the header strip and takes the nodes away.
+    // Collapsing leaves the header strip and takes the dots away.
     await tester.tap(find.byTooltip('收起时间线'));
     await tester.pumpAndSettle();
     expect(band, findsOneWidget);
-    expect(inBand('伏见稻荷大社'), findsNothing);
+    expect(dotFor('伏见稻荷大社'), findsNothing);
   });
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -9,7 +10,7 @@ import 'entry_card.dart';
 /// headers (day 1 = [tripStart]), each day chronological and days ascending —
 /// so the list reads as an itinerary. Shared by the trip detail screen and
 /// the trip-records side panel.
-class EntryGroupedList extends StatelessWidget {
+class EntryGroupedList extends StatefulWidget {
   final List<Entry> entries;
   final DateTime tripStart;
   final EdgeInsetsGeometry padding;
@@ -22,6 +23,11 @@ class EntryGroupedList extends StatelessWidget {
   /// shown highlighted so the list tracks the map's selection.
   final String? selectedEntryId;
 
+  /// When set, each id it reports scrolls that record's card to the middle of
+  /// the list (the map drives this from the timeline). Every card is then
+  /// built up front, so an off-screen one can still be scrolled to.
+  final ValueListenable<String?>? reveal;
+
   const EntryGroupedList({
     super.key,
     required this.entries,
@@ -29,13 +35,54 @@ class EntryGroupedList extends StatelessWidget {
     this.padding = const EdgeInsets.only(bottom: 12),
     this.onEntryTap,
     this.selectedEntryId,
+    this.reveal,
   });
+
+  @override
+  State<EntryGroupedList> createState() => _EntryGroupedListState();
+}
+
+class _EntryGroupedListState extends State<EntryGroupedList> {
+  final Map<String, GlobalKey> _cardKeys = {};
+
+  @override
+  void initState() {
+    super.initState();
+    widget.reveal?.addListener(_onReveal);
+  }
+
+  @override
+  void didUpdateWidget(EntryGroupedList old) {
+    super.didUpdateWidget(old);
+    if (old.reveal != widget.reveal) {
+      old.reveal?.removeListener(_onReveal);
+      widget.reveal?.addListener(_onReveal);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.reveal?.removeListener(_onReveal);
+    super.dispose();
+  }
+
+  void _onReveal() {
+    final id = widget.reveal?.value;
+    final ctx = id == null ? null : _cardKeys[id]?.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      alignment: 0.5,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final groups = <int, List<Entry>>{};
-    for (final e in entries) {
-      final day = dayIndexInTrip(e.timestamp, tripStart);
+    for (final e in widget.entries) {
+      final day = dayIndexInTrip(e.timestamp, widget.tripStart);
       groups.putIfAbsent(day, () => []).add(e);
     }
     final days = groups.keys.toList()..sort();
@@ -51,13 +98,26 @@ class EntryGroupedList extends StatelessWidget {
                 fontWeight: FontWeight.bold, color: Colors.grey)),
       ));
       children.addAll(items.map((e) => EntryCard(
-            key: ValueKey(e.id),
+            key: widget.reveal == null
+                ? ValueKey(e.id)
+                : _cardKeys.putIfAbsent(e.id, GlobalKey.new),
             entry: e,
-            onTap: onEntryTap == null ? null : () => onEntryTap!(e),
-            selected: e.id == selectedEntryId,
+            onTap: widget.onEntryTap == null
+                ? null
+                : () => widget.onEntryTap!(e),
+            selected: e.id == widget.selectedEntryId,
           )));
     }
 
-    return ListView(padding: padding, children: children);
+    if (widget.reveal == null) {
+      return ListView(padding: widget.padding, children: children);
+    }
+    return SingleChildScrollView(
+      padding: widget.padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    );
   }
 }

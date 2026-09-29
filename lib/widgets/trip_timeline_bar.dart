@@ -10,27 +10,29 @@ import '../state/app_state.dart';
 /// wide (web / desktop) map while a trip is open.
 ///
 /// The right-hand [TripRecordsPanel] answers "what is in this trip"; this band
-/// answers "in what order did it happen" — every record of the trip laid out
-/// left to right in time order, split by day, so a whole trip reads as one
-/// sequence. It only exists while a trip is selected: closing the trip closes
-/// the band with it.
+/// answers "when did it happen". It is a true time axis: every day of the trip
+/// is one 24-hour span of equal width, that day's date pill sits on its
+/// midnight, and each record is a small dot placed at its actual clock time —
+/// so gaps in the day (and whole quiet days) read as real gaps. A dot's time
+/// and title appear only in a tooltip while the pointer is on it.
 ///
-/// Tapping a node reports it through [onNodeTap] (the map zooms to that record
-/// and expands its bubble), and [selectedEntryId] keeps the band in step with
-/// the map's own selection — the selected node is enlarged and scrolled into
-/// view.
+/// Hovering a dot reports it through [onNodeHover] (the map pans to it and the
+/// records panel scrolls to it); tapping reports it through [onNodeTap] (the
+/// map zooms to it and expands its bubble). [selectedEntryId] keeps the band in
+/// step with the map's own selection — the selected dot is enlarged and
+/// scrolled into view.
 class TripTimelineBar extends StatefulWidget {
   final String tripId;
 
-  /// The trip's route colour, so the band reads as part of that trip.
-  final Color accent;
-
   /// The route-leg colour for a given day of the trip — passed in by the map so
-  /// a day's nodes carry exactly the colour of that day's route line.
+  /// a day's dots carry exactly the colour of that day's route line.
   final Color Function(int day, int lastDay) dayColor;
 
-  /// Reports a tapped node (the map zooms to its location).
+  /// Reports a tapped dot (the map zooms to its location).
   final void Function(Entry entry)? onNodeTap;
+
+  /// Reports the dot under the pointer, or null once the pointer leaves it.
+  final void Function(Entry? entry)? onNodeHover;
 
   /// The record currently expanded on the map, if any.
   final String? selectedEntryId;
@@ -45,15 +47,15 @@ class TripTimelineBar extends StatefulWidget {
 
   /// Band heights, exported so the map can lift its bottom-left controls and
   /// shorten the records panel by exactly as much as the band takes.
-  static const double expandedHeight = 148;
+  static const double expandedHeight = 112;
   static const double collapsedHeight = 44;
 
   const TripTimelineBar({
     super.key,
     required this.tripId,
-    required this.accent,
     required this.dayColor,
     this.onNodeTap,
+    this.onNodeHover,
     this.selectedEntryId,
     this.expanded = true,
     this.onToggleExpanded,
@@ -65,15 +67,29 @@ class TripTimelineBar extends StatefulWidget {
 }
 
 class _TripTimelineBarState extends State<TripTimelineBar> {
+  /// Width of one hour on the axis; a day is 24 of these.
+  static const double _pxPerHour = 36;
+
+  /// Room before the first midnight and after the last, so the end pills
+  /// aren't clipped by the band's edges.
+  static const double _pad = 44;
+
+  /// Top of the marker row, and the rail's centre line within it.
+  static const double _rowTop = 8;
+  static const double _railY = _rowTop + 18;
+
+  /// Hours that get a small tick (and label) on the rail.
+  static const _tickHours = [6, 12, 18];
+
   final ScrollController _scroll = ScrollController();
 
-  /// One key per node, so the selected one can be scrolled into view.
+  /// One key per dot, so the selected one can be scrolled into view.
   final Map<String, GlobalKey> _nodeKeys = {};
 
   @override
   void didUpdateWidget(TripTimelineBar old) {
     super.didUpdateWidget(old);
-    // A record selected on the map (or in the side panel) scrolls its node into
+    // A record selected on the map (or in the side panel) scrolls its dot into
     // the middle of the band, so the two views never disagree about where you
     // are in the trip.
     if (widget.selectedEntryId != old.selectedEntryId ||
@@ -131,7 +147,7 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _header(theme, trip.title, entries.length),
+          _header(),
           if (widget.expanded) ...[
             Divider(
                 height: 1,
@@ -147,11 +163,8 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
                       child: SingleChildScrollView(
                         controller: _scroll,
                         scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: _cells(theme, entries, trip.startDate),
-                        ),
+                        child: _track(theme, entries, trip.startDate,
+                            trip.endDate),
                       ),
                     ),
             ),
@@ -161,27 +174,16 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
     );
   }
 
-  Widget _header(ThemeData theme, String title, int count) {
+  /// Just the band's controls: the trip's name and dates are already at the top
+  /// of the records panel beside it.
+  Widget _header() {
     return SizedBox(
       height: TripTimelineBar.collapsedHeight,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 6, 0),
+        padding: const EdgeInsets.only(right: 6),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            Icon(Icons.timeline, size: 18, color: widget.accent),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                '$title · 时间线',
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text('$count 个节点',
-                style: TextStyle(fontSize: 11, color: theme.hintColor)),
-            const Spacer(),
             if (widget.onToggleExpanded != null)
               IconButton(
                 icon: Icon(widget.expanded
@@ -204,214 +206,253 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
     );
   }
 
-  /// The band's contents as one flat row: a day marker in front of each day's
-  /// nodes, and the rail drawn through every cell so the whole trip reads as a
-  /// single line (open at neither end, closed at both).
-  List<Widget> _cells(ThemeData theme, List<Entry> entries, DateTime start) {
-    final groups = <int, List<Entry>>{};
-    for (final e in entries) {
-      groups.putIfAbsent(dayIndexInTrip(e.timestamp, start), () => []).add(e);
-    }
-    final days = groups.keys.toList()..sort();
-    final lastDay = days.last;
+  /// The whole axis as one fixed-width stack: a rail segment per day in that
+  /// day's route colour, hour ticks, a date pill on every midnight, and a dot
+  /// at each record's time.
+  Widget _track(ThemeData theme, List<Entry> entries, DateTime start,
+      DateTime? end) {
+    const dayLen = 24 * _pxPerHour;
+    double x(int day, [double hours = 0]) =>
+        _pad + (day - 1) * dayLen + hours * _pxPerHour;
 
-    // Build the cells first, then hand each its position, so the rail can stop
-    // at the first and last cell instead of running off both ends.
-    final specs = <(int day, Entry? entry)>[];
-    for (final day in days) {
-      specs.add((day, null));
-      for (final e in groups[day]!) {
-        specs.add((day, e));
+    // Colours follow the map: day 1 palest, the last day with records deepest.
+    final lastDay =
+        entries.map((e) => dayIndexInTrip(e.timestamp, start)).reduce(
+              (a, b) => a > b ? a : b,
+            );
+    // Every day of the trip gets its span — quiet days included — out to the
+    // trip's end (or its latest record, for a trip that's still running).
+    final totalDays = end == null
+        ? lastDay
+        : (dayIndexInTrip(end, start) > lastDay
+            ? dayIndexInTrip(end, start)
+            : lastDay);
+    Color colorOf(int day) =>
+        widget.dayColor(day > lastDay ? lastDay : day, lastDay);
+
+    final surface = theme.colorScheme.surface;
+    final children = <Widget>[];
+
+    for (var d = 1; d <= totalDays; d++) {
+      final c = colorOf(d);
+      children.add(Positioned(
+        left: x(d),
+        top: _railY - 1,
+        width: dayLen,
+        height: 2,
+        child: ColoredBox(color: c.withValues(alpha: 0.45)),
+      ));
+      for (final h in _tickHours) {
+        children
+          ..add(Positioned(
+            left: x(d, h.toDouble()) - 0.5,
+            top: _railY - 3,
+            width: 1,
+            height: 6,
+            child: ColoredBox(color: c.withValues(alpha: 0.65)),
+          ))
+          ..add(Positioned(
+            left: x(d, h.toDouble()) - 12,
+            top: 6,
+            width: 24,
+            child: Text('$h',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 9, color: theme.hintColor)),
+          ));
       }
     }
 
-    return [
-      for (var i = 0; i < specs.length; i++)
-        if (specs[i].$2 == null)
-          _dayCell(
-            theme,
-            day: specs[i].$1,
-            date: groups[specs[i].$1]!.first.timestamp,
-            color: widget.dayColor(specs[i].$1, lastDay),
-            first: i == 0,
-            last: i == specs.length - 1,
-          )
-        else
-          _nodeCell(
-            theme,
-            entry: specs[i].$2!,
-            color: widget.dayColor(specs[i].$1, lastDay),
-            first: i == 0,
-            last: i == specs.length - 1,
-          ),
-    ];
+    for (var d = 1; d <= totalDays; d++) {
+      final date = DateTime(start.year, start.month, start.day + d - 1);
+      children.add(Positioned(
+        left: x(d) - 40,
+        top: _rowTop,
+        width: 80,
+        child: _dayMarker(theme, d, date, colorOf(d), surface),
+      ));
+    }
+
+    const hit = _TimelineDot.hitSize;
+    for (final e in entries) {
+      final day = dayIndexInTrip(e.timestamp, start);
+      final hours = e.timestamp.hour + e.timestamp.minute / 60;
+      children.add(Positioned(
+        key: _nodeKeys.putIfAbsent(e.id, GlobalKey.new),
+        left: x(day, hours) - hit / 2,
+        top: _railY - hit / 2,
+        width: hit,
+        height: hit,
+        child: _TimelineDot(
+          entry: e,
+          color: colorOf(day),
+          selected: e.id == widget.selectedEntryId,
+          onTap: widget.onNodeTap == null ? null : () => widget.onNodeTap!(e),
+          onHover: widget.onNodeHover,
+        ),
+      ));
+    }
+
+    return SizedBox(
+      width: x(totalDays + 1) + _pad,
+      child: Stack(clipBehavior: Clip.none, children: children),
+    );
   }
 
-  Widget _dayCell(
-    ThemeData theme, {
-    required int day,
-    required DateTime date,
-    required Color color,
-    required bool first,
-    required bool last,
-  }) {
-    return SizedBox(
-      width: 78,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 16),
-          _rail(
-            first: first,
-            last: last,
-            color: color,
+  /// A day's midnight: its date as an opaque pill sitting on the rail (so the
+  /// rail doesn't show through it), and 第N天 beneath.
+  Widget _dayMarker(
+      ThemeData theme, int day, DateTime date, Color color, Color surface) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 36,
+          child: Center(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.16),
+                // Pre-mixed onto the band's surface rather than translucent.
+                color: Color.alphaBlend(color.withValues(alpha: 0.16), surface),
                 borderRadius: BorderRadius.circular(9),
-                border: Border.all(color: color.withValues(alpha: 0.55)),
+                border: Border.all(
+                    color: Color.alphaBlend(
+                        color.withValues(alpha: 0.55), surface)),
               ),
-              child: Text('第$day天',
+              child: Text(DateFormat('MM-dd').format(date),
                   style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                       color: _readable(theme, color))),
             ),
           ),
-          const SizedBox(height: 6),
-          SizedBox(
-            height: 34,
-            child: Text(DateFormat('M月d日').format(date),
-                style: TextStyle(fontSize: 11, color: theme.hintColor)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _nodeCell(
-    ThemeData theme, {
-    required Entry entry,
-    required Color color,
-    required bool first,
-    required bool last,
-  }) {
-    final selected = entry.id == widget.selectedEntryId;
-    final key = _nodeKeys.putIfAbsent(entry.id, GlobalKey.new);
-    final d = selected ? 32.0 : 26.0;
-
-    return SizedBox(
-      key: key,
-      width: 112,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: widget.onNodeTap == null ? null : () => widget.onNodeTap!(entry),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              height: 16,
-              child: Text(DateFormat('HH:mm').format(entry.timestamp),
-                  style: TextStyle(fontSize: 11, color: theme.hintColor)),
-            ),
-            _rail(
-              first: first,
-              last: last,
-              color: color,
-              child: Container(
-                width: d,
-                height: d,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: selected
-                        ? theme.colorScheme.surface
-                        : theme.colorScheme.surface.withValues(alpha: 0.9),
-                    width: selected ? 3 : 2,
-                  ),
-                  boxShadow: selected
-                      ? [
-                          BoxShadow(
-                            color: color.withValues(alpha: 0.5),
-                            blurRadius: 8,
-                            spreadRadius: 1,
-                          )
-                        ]
-                      : null,
-                ),
-                child: Text(entry.markerGlyph,
-                    style: TextStyle(fontSize: selected ? 15 : 12)),
-              ),
-            ),
-            const SizedBox(height: 6),
-            SizedBox(
-              height: 34,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  entry.displayTitle,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.25,
-                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                    color: selected
-                        ? theme.colorScheme.onSurface
-                        : theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-          ],
         ),
-      ),
-    );
-  }
-
-  /// One cell's slice of the timeline rail: a hairline through the cell with
-  /// [child] (a node dot or a day pill) sitting on it. The halves before the
-  /// first cell's marker and after the last one's are left blank so the line
-  /// starts and ends on a marker.
-  Widget _rail({
-    required bool first,
-    required bool last,
-    required Color color,
-    required Widget child,
-  }) {
-    final line = color.withValues(alpha: 0.45);
-    return SizedBox(
-      height: 36,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                  child: Container(
-                      height: 2, color: first ? Colors.transparent : line)),
-              Expanded(
-                  child: Container(
-                      height: 2, color: last ? Colors.transparent : line)),
-            ],
-          ),
-          child,
-        ],
-      ),
+        const SizedBox(height: 4),
+        Text('第$day天',
+            style: TextStyle(fontSize: 11, color: theme.hintColor)),
+      ],
     );
   }
 
   /// The day colour is tuned for a route line on a map; darken the pale end of
-  /// it so the day label stays readable as text on the panel's surface.
+  /// it so the date stays readable as text on the panel's surface.
   Color _readable(ThemeData theme, Color color) {
     final hsl = HSLColor.fromColor(color);
     if (theme.brightness == Brightness.dark) return color;
     return hsl.lightness <= 0.45
         ? color
         : hsl.withLightness(0.35).toColor();
+  }
+}
+
+/// One record on the timeline: a tiny dot that springs up in size while the
+/// pointer is on it (the hit area is a little wider than the dot itself) and
+/// shows the record's time and title in a tooltip. Hovering the label area
+/// does nothing — only the dot's own neighbourhood reacts.
+class _TimelineDot extends StatefulWidget {
+  static const double hitSize = 22;
+  static const double size = 6;
+  static const double selectedSize = 9;
+  static const double hoverScale = 1.8;
+
+  final Entry entry;
+  final Color color;
+  final bool selected;
+  final VoidCallback? onTap;
+  final void Function(Entry? entry)? onHover;
+
+  const _TimelineDot({
+    required this.entry,
+    required this.color,
+    required this.selected,
+    this.onTap,
+    this.onHover,
+  });
+
+  @override
+  State<_TimelineDot> createState() => _TimelineDotState();
+}
+
+class _TimelineDotState extends State<_TimelineDot> {
+  bool _hovered = false;
+
+  void _setHovered(bool on) {
+    if (_hovered == on) return;
+    setState(() => _hovered = on);
+    widget.onHover?.call(on ? widget.entry : null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final e = widget.entry;
+    final d = widget.selected ? _TimelineDot.selectedSize : _TimelineDot.size;
+
+    return Tooltip(
+      richMessage: TextSpan(children: [
+        TextSpan(
+          text: '${DateFormat('HH:mm').format(e.timestamp)}\n',
+          style: TextStyle(fontSize: 11, color: theme.hintColor, height: 1.3),
+        ),
+        TextSpan(
+          text: e.displayTitle,
+          style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface,
+              height: 1.35),
+        ),
+      ]),
+      preferBelow: false,
+      verticalOffset: 14,
+      waitDuration: Duration.zero,
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 2)),
+        ],
+      ),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => _setHovered(true),
+        onExit: (_) => _setHovered(false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: Center(
+            child: AnimatedScale(
+              scale: _hovered ? _TimelineDot.hoverScale : 1,
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutBack,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: d,
+                height: d,
+                decoration: BoxDecoration(
+                  color: widget.color,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: theme.colorScheme.surface,
+                    width: widget.selected ? 1.5 : 1,
+                  ),
+                  boxShadow: widget.selected
+                      ? [
+                          BoxShadow(color: widget.color, spreadRadius: 1),
+                          BoxShadow(
+                            color: widget.color.withValues(alpha: 0.45),
+                            blurRadius: 5,
+                            spreadRadius: 1,
+                          ),
+                        ]
+                      : null,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
