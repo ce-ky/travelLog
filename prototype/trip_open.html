@@ -161,20 +161,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 #band .bh .ti { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 #band .bh .n { font-size: 11px; color: var(--hint); margin-left: 8px; white-space: nowrap; }
 #band .bh .sp { flex: 1; }
-#brow { flex: 1; overflow-x: auto; overflow-y: hidden; display: flex; align-items: flex-start; padding: 0 12px; scrollbar-width: thin; }
+#brow { flex: 1; overflow-x: auto; overflow-y: hidden; display: flex; align-items: flex-start; padding: 8px 12px 0; scrollbar-width: thin; }
 .cell { flex: none; display: flex; flex-direction: column; align-items: center; }
 .cell.node { border-radius: 10px; cursor: pointer; }
 .cell.node:hover { background: rgba(0,0,0,.04); }
-.cell .tm { height: 16px; font-size: var(--timeFs); color: var(--hint); line-height: 16px; font-variant-numeric: tabular-nums; }
+.cell .tm { height: 16px; margin-top: 4px; font-size: var(--timeFs); color: var(--hint); line-height: 16px; font-variant-numeric: tabular-nums; }
 .rail { height: 36px; width: 100%; position: relative; display: grid; place-items: center; }
 .rail i { position: absolute; top: 50%; height: var(--railW); margin-top: calc(var(--railW) / -2); width: 50%; }
 .rail i.a { left: 0; } .rail i.b { right: 0; }
 .rail > b { position: relative; }
 .dot { border-radius: 50%; display: grid; place-items: center; transition: width .15s, height .15s; }
 .pill { padding: 3px 8px; border-radius: 9px; font-weight: 700; font-size: var(--dayPillFs); white-space: nowrap; }
-.cell .lb { height: 34px; margin-top: 6px; padding: 0 4px; font-size: var(--nodeTitleFs); line-height: 1.25; text-align: center; color: var(--on-surface-variant); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cell .lb { height: 34px; margin-top: 2px; padding: 0 4px; font-size: var(--nodeTitleFs); line-height: 1.25; text-align: center; color: var(--on-surface-variant); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .cell.sel .lb { font-weight: 700; color: var(--on-surface); }
-.cell .dd { height: 34px; margin-top: 6px; font-size: 11px; color: var(--hint); }
+.cell .dd { height: 34px; margin-top: 4px; line-height: 16px; font-size: 11px; color: var(--hint); }
 .empty { flex: 1; display: grid; place-items: center; color: var(--hint); }
 
 .toast { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); background: #323232; color: #fff; padding: 10px 16px; border-radius: 4px; font-size: 14px; z-index: 30; }
@@ -511,12 +511,12 @@ function bandHtml(bandHeight, lastDay) {
     const rail = inner => `<div class="rail"><i class="a" style="background:${first ? 'transparent' : rgb(c, P.railAlpha)}"></i><i class="b" style="background:${last ? 'transparent' : rgb(c, P.railAlpha)}"></i><b>${inner}</b></div>`;
     if (!e) {
       const f = days[d][0].ts;
-      cells += `<div class="cell" style="width:${P.dayW}px"><div style="height:16px"></div>${rail(`<span class="pill" style="background:${rgb(blend(c, .16))};border:1px solid ${rgb(blend(c, .55))};color:${rgb(readable(d, lastDay))}">${esc(S('dayPill', dv(d, f)))}</span>`)}<div class="dd">${esc(S('dayDate', dv(d, f)))}</div></div>`;
+      cells += `<div class="cell" style="width:${P.dayW}px">${rail(`<span class="pill" style="background:${rgb(blend(c, .16))};border:1px solid ${rgb(blend(c, .55))};color:${rgb(readable(d, lastDay))}">${esc(S('dayPill', dv(d, f)))}</span>`)}<div class="dd">${esc(S('dayDate', dv(d, f)))}</div></div>`;
     } else {
       const s = e.id === sel, dd = s ? P.dotSelD : P.dotD;
       cells += `<div class="cell node ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="width:${P.nodeW}px">
-        <div class="tm">${pad(e.ts.getHours())}:${pad(e.ts.getMinutes())}</div>
         ${rail(`<span class="dot" style="width:${dd}px;height:${dd}px;background:${rgb(c)};border:${s ? 3 : 2}px solid ${s ? 'var(--surface)' : 'rgba(245,251,247,.9)'};${s ? `box-shadow:0 0 8px 1px ${rgb(c, .5)};` : ''}font-size:${s ? 15 : 12}px">${e.g}</span>`)}
+        <div class="tm">${pad(e.ts.getHours())}:${pad(e.ts.getMinutes())}</div>
         <div class="lb">${esc(displayTitle(e))}</div></div>`;
     }
   });
