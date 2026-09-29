@@ -223,7 +223,7 @@ const PARAMS = [
   ['dotSelD', '选中节点圆直径', 32, 18, 48, 1, '_nodeCell · d = 32 (selected)', '底部时间线'],
   ['nodeTitleFs', '节点标题字号', 12, 10, 16, 0.5, '_nodeCell · fontSize: 12', '底部时间线'],
   ['timeFs', '时间字号', 11, 9, 14, 0.5, '_nodeCell · HH:mm fontSize: 11', '底部时间线'],
-  ['dayPillFs', '「第N天」字号', 11, 9, 14, 0.5, '_dayCell · fontSize: 11', '底部时间线'],
+  ['dayPillFs', '日期胶囊字号', 11, 9, 14, 0.5, '_dayCell · fontSize: 11', '底部时间线'],
   ['railW', '轨道线粗细', 2, 1, 5, 0.5, '_rail · height: 2', '底部时间线'],
   ['railAlpha', '轨道线不透明度', 0.45, 0.1, 1, 0.05, '_rail · alpha: 0.45', '底部时间线'],
   ['panelTitleFs', '旅途标题字号', 22, 16, 28, 1, 'TripRecordsPanel · titleLarge', '右侧记录栏'],
@@ -245,8 +245,8 @@ const STRINGS = [
   ['bandEmpty', '时间线空状态', '这趟旅途还没有记录', ''],
   ['collapse', '收起按钮提示', '收起时间线', ''],
   ['expand', '展开按钮提示', '展开时间线', ''],
-  ['dayPill', '日期胶囊', '第{n}天', '{n}'],
-  ['dayDate', '胶囊下日期', '{m}月{d}日', '{m} {d}'],
+  ['dayPill', '日期胶囊', '{mm}-{dd}', '{mm} {dd} {n}'],
+  ['dayDate', '胶囊下小字', '第{n}天', '{n} {m} {d} {mm} {dd}'],
   ['panelDates', '右侧栏日期行', '{start} – {end} · {n} 条记录', '{start} {end} {n}'],
   ['dayHeader', '分组标题', '第{n}天 · {m}月{d}日', '{n} {m} {d}'],
   ['companions', '同行者行', '与 {names}', '{names}'],
@@ -264,7 +264,10 @@ STRINGS.forEach(s => DEF['s_' + s[0]] = s[2]);
 TOGGLES.forEach(t => DEF['t_' + t[0]] = t[2]);
 let P = { ...DEF };
 const STORE = 'travellog-proto-v1';
-try { const saved = JSON.parse(localStorage.getItem(STORE) || '{}'); for (const k in saved) if (k in DEF) P[k] = saved[k]; } catch (e) {}
+try { const saved = JSON.parse(localStorage.getItem(STORE) || '{}'); // Old defaults saved by v1 of this page yield to the new ones.
+  if (saved.s_dayPill === '第{n}天') delete saved.s_dayPill;
+  if (saved.s_dayDate === '{m}月{d}日') delete saved.s_dayDate;
+  for (const k in saved) if (k in DEF) P[k] = saved[k]; } catch (e) {}
 function save() { try { localStorage.setItem(STORE, JSON.stringify(P)); } catch (e) {} }
 const S = (k, vars = {}) => String(P['s_' + k]).replace(/\{(\w+)\}/g, (m, v) => v in vars ? vars[v] : m);
 
@@ -294,6 +297,7 @@ resetData();
 const displayTitle = e => e.title || e.place || (e.body.length > 30 ? e.body.slice(0, 30) + '…' : e.body) || TYPES[e.type][0];
 const dayIndex = ts => Math.max(1, Math.round((new Date(ts.getFullYear(), ts.getMonth(), ts.getDate()) - TRIP.start) / 864e5) + 1);
 const pad = n => String(n).padStart(2, '0');
+const dv = (n, f) => ({ n, m: f.getMonth() + 1, d: f.getDate(), mm: pad(f.getMonth() + 1), dd: pad(f.getDate()) });
 const fmtDot = d => `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
 
 /* ======================= colours (ported from map_screen.dart) ======================= */
@@ -502,7 +506,7 @@ function bandHtml(bandHeight, lastDay) {
     const rail = inner => `<div class="rail"><i class="a" style="background:${first ? 'transparent' : rgb(c, P.railAlpha)}"></i><i class="b" style="background:${last ? 'transparent' : rgb(c, P.railAlpha)}"></i><b>${inner}</b></div>`;
     if (!e) {
       const f = days[d][0].ts;
-      cells += `<div class="cell" style="width:${P.dayW}px"><div style="height:16px"></div>${rail(`<span class="pill" style="background:${rgb(c, .16)};border:1px solid ${rgb(c, .55)};color:${rgb(readable(d, lastDay))}">${esc(S('dayPill', { n: d }))}</span>`)}<div class="dd">${esc(S('dayDate', { m: f.getMonth() + 1, d: f.getDate() }))}</div></div>`;
+      cells += `<div class="cell" style="width:${P.dayW}px"><div style="height:16px"></div>${rail(`<span class="pill" style="background:${rgb(c, .16)};border:1px solid ${rgb(c, .55)};color:${rgb(readable(d, lastDay))}">${esc(S('dayPill', dv(d, f)))}</span>`)}<div class="dd">${esc(S('dayDate', dv(d, f)))}</div></div>`;
     } else {
       const s = e.id === sel, dd = s ? P.dotSelD : P.dotD;
       cells += `<div class="cell node ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="width:${P.nodeW}px">
