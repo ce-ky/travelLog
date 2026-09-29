@@ -87,7 +87,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 #app { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; background: var(--land); font-size: 14px; box-shadow: 0 0 0 1px rgba(0,0,0,.3); }
 
 /* map */
-#mapSvg { position: absolute; inset: 0; }
+/* The map "camera": panning = translating the whole world layer, eased. */
+#world { position: absolute; inset: 0; transition: transform .6s cubic-bezier(.25,.8,.25,1); will-change: transform; }
+#mapSvg, #marks { position: absolute; inset: 0; overflow: visible; }
 #overlay { position: absolute; inset: 0; }
 .frost { background: rgba(255,255,255,.86); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border: 1px solid rgba(0,0,0,.08); border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,.18); position: relative; }
 .frost::after { content: ""; position: absolute; left: 50%; bottom: -9px; width: 12px; height: 10px; margin-left: -6px; background: inherit; clip-path: polygon(0 0, 100% 0, 50% 100%); }
@@ -137,7 +139,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 #panel .ph-head .tx { flex: 1; min-width: 0; }
 #panel .ph-title { font-size: var(--panelTitleFs); line-height: 1.27; }
 #panel .ph-sub { font-size: var(--panelSubFs); color: var(--hint); margin-top: 4px; }
-#plist { flex: 1; overflow-y: auto; padding-bottom: 12px; }
+#plist { position: relative; flex: 1; overflow-y: auto; padding-bottom: 12px; }
 .dayh { padding: 16px 16px 4px; font-weight: 700; color: var(--grey); font-size: var(--dayHeaderFs); }
 .ecard { margin: 6px 12px; border-radius: 12px; background: var(--surface-low); box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 1px 3px rgba(0,0,0,.1); padding: 12px 4px 12px 12px; cursor: pointer; border: 1.5px solid transparent; transition: background .15s; }
 .ecard:hover { background: #e7eeea; }
@@ -202,7 +204,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   <main id="stage">
     <button id="dockToggle" hidden><span class="ms">tune</span>原型调参</button>
     <div id="app">
-      <svg id="mapSvg" aria-hidden="true"></svg>
+      <div id="world"><svg id="mapSvg" aria-hidden="true"></svg><div id="marks"></div></div>
       <div id="overlay"></div>
     </div>
   </main>
@@ -257,6 +259,7 @@ const STRINGS = [
   ['close', '关闭按钮提示', '关闭', ''],
 ];
 const TOGGLES = [
+  ['hoverLink', '移入圆点联动地图与右侧栏', true, '新增：移入圆点时地图平移、右侧栏滚动，使该记录居中；点击时两处同时展开选中'],
   ['panelFollow', '右侧栏跟随选中滚动', false, '现状：只有时间线会把选中项滚到中间，右侧栏不动'],
   ['bandShowTitle', '时间线标题栏显示左侧内容', false, '已去掉图标、「旅途名 · 时间线」和「N 个节点」，勾选可对比原样'],
   ['bandFollow', '时间线跟随选中滚动', true, '现状：开启（Scrollable.ensureVisible alignment 0.5）'],
@@ -337,7 +340,8 @@ const FRAMES = { fit: '适应窗口', '1280x800': '1280×800', '1440x900': '1440
 let W = 1280, H = 800;
 
 const $ = s => document.querySelector(s);
-const app = $('#app'), overlay = $('#overlay'), svg = $('#mapSvg');
+const app = $('#app'), overlay = $('#overlay'), svg = $('#mapSvg'), world = $('#world'), marks = $('#marks');
+let proj = null, cam = [0, 0], hoverId = null, hoverTimer = null;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* ======================= frame sizing ======================= */
@@ -426,6 +430,8 @@ function render() {
   r.setProperty('--dotHit', P.dotHit + 'px');
 
   const { p, lastDay } = renderMap();
+  proj = p;
+  world.style.transform = `translate(${cam[0]}px, ${cam[1]}px)`;
   const bandHeight = expanded ? P.bandH : P.bandCollapsedH;
   const bottomInset = tripOpen ? bandHeight + P.margin + P.gap : 0;
   let h = '';
@@ -448,6 +454,8 @@ function render() {
       <div class="bd"><div class="hd"><span class="g">${se.g}</span><span class="tt">${esc(displayTitle(se))}</span><button data-act="desel" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
       <div class="pl">📍 ${esc(se.place)}</div>${se.body ? `<div class="bo">${esc(se.body)}</div>` : ''}</div></div></div></div>`;
   }
+  marks.innerHTML = h;
+  h = '';
   if (!tripOpen) {
     h += `<div class="hintchip">旅途已关闭 · 点左上角「旅途」按钮重新打开</div>`;
   }
@@ -536,11 +544,31 @@ function bandHtml(bandHeight, lastDay) {
 }
 
 /* ======================= interactions ======================= */
+/* Pan the map so a record sits in the middle of the map area the floating
+   panels leave uncovered. The world layer's CSS transition does the easing. */
+function centerMap(id) {
+  const e = entries.find(x => x.id === id);
+  if (!e || !proj) return;
+  const [x, y] = proj(e.lat, e.lng);
+  const bandHeight = expanded ? P.bandH : P.bandCollapsedH;
+  const cx = (W - (tripOpen ? P.panelWidth + P.margin * 2 : 0)) / 2;
+  const cy = (H - (tripOpen ? bandHeight + P.margin + P.gap : 0)) / 2;
+  cam = [cx - x, cy - y];
+  world.style.transform = `translate(${cam[0]}px, ${cam[1]}px)`;
+}
+/* Scroll the records panel so a record's card sits in its vertical middle. */
+function centerPanel(id) {
+  const list = $('#plist'), card = document.querySelector(`[data-card="${id}"]`);
+  if (!list || !card) return;
+  const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+  list.scrollTo({ top: card.offsetTop - list.clientHeight / 2 + card.offsetHeight / 2, behavior: smooth });
+}
 function select(id, source) {
   sel = id; render();
   if (!id) return;
+  if (source === 'node' && P.t_hoverLink) { centerMap(id); centerPanel(id); }
   const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-  if (P.t_bandFollow && source !== 'node') {
+  if (P.t_bandFollow) {
     const n = document.querySelector(`[data-node="${id}"]`), row = $('#brow');
     if (n && row) row.scrollTo({ left: n.offsetLeft - row.clientWidth / 2 + n.offsetWidth / 2, behavior: smooth });
   }
@@ -553,7 +581,17 @@ function toast(msg) {
   const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; app.appendChild(t);
   setTimeout(() => t.remove(), 2200);
 }
-overlay.addEventListener('click', ev => {
+// Hovering a timeline dot (its hit ring, not the text) previews that record:
+// the map pans to it and the records panel scrolls to it. A short delay keeps a
+// quick sweep across the band from yanking both views back and forth.
+app.addEventListener('mouseover', ev => {
+  const hit = ev.target.closest('.hit');
+  const id = hit ? hit.closest('[data-node]').dataset.node : null;
+  if (id === hoverId) return;
+  hoverId = id; clearTimeout(hoverTimer);
+  if (id && P.t_hoverLink) hoverTimer = setTimeout(() => { centerMap(id); centerPanel(id); }, 90);
+});
+app.addEventListener('click', ev => {
   const a = ev.target.closest('[data-act]');
   if (a) {
     ev.stopPropagation();
