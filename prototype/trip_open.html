@@ -529,7 +529,6 @@ function cardHtml(e) {
     const hh = e.imgs === 1 ? P.cardImgH : P.cardMultiImgH;
     imgs = `<div class="imgs">${Array.from({ length: Math.min(e.imgs, 4) }, (_, i) => `<div class="ph" style="height:${hh}px;background:${photoBg(e, i)}"></div>`).join('')}</div>`;
   }
-  const ts = e.ts, when = `${fmtDot(ts)} ${pad(ts.getHours())}:${pad(ts.getMinutes())}`;
   const del = armed === e.id
     ? `<button class="confirm" data-act="confirmDel" data-id="${e.id}">${esc(S('confirmDelete'))}</button>`
     : `<button class="ibtn" data-act="arm" data-id="${e.id}" title="删除"><span class="ms">delete</span></button>`;
@@ -538,8 +537,7 @@ function cardHtml(e) {
       ${e.title ? `<div class="ti">${esc(e.title)}</div>` : ''}
       ${e.body ? `<div class="bo">${esc(e.body)}</div>` : ''}
       ${!e.title && !e.body ? `<div class="ti">记录</div>` : ''}
-      <div class="meta"><div class="l1"><span class="ms">place</span><span class="pn">${esc(e.place)}</span></div>
-        <div class="sm">${when} · ${esc(TRIP.title)}</div></div>
+      <div class="meta"><div class="l1"><span class="ms">place</span><span class="pn">${esc(e.place)}</span></div></div>
     </div>
     <button class="ibtn" data-act="toast" data-msg="编辑会在卡片内展开记录表单（本原型不包含）" title="编辑"><span class="ms">edit</span></button>${del}</div></article>`;
 }
