@@ -203,10 +203,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// triggers, so the *first* record tap doesn't stutter (it's smooth on the
   /// second because these are cached after the first paint).
   ///
-  /// On CanvasKit/web the costly one-offs are: rasterizing a colour emoji — the
-  /// marker glyphs (⛩️/📷/✍️/🎨/🌙) and 📍 — which compiles a dedicated emoji
-  /// shader and seeds the colour-glyph atlas; text shaping; and the bubble's
-  /// rounded-rect anti-aliased clip. The map draws none of these before a record
+  /// On CanvasKit/web the costly one-offs are text shaping (CJK included) and
+  /// the bubble's rounded-rect anti-aliased clip. The map draws none of these before a record
   /// is opened, so the first bubble pays all of it at once. Rendering them once
   /// offscreen here moves that cost to startup.
   ///
@@ -220,9 +218,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       // Rounded-rect AA clip, matching the bubble's ClipRRect.
       canvas.clipRRect(RRect.fromRectAndRadius(
           const Rect.fromLTWH(0, 0, 80, 80), const Radius.circular(8)));
-      // Colour emoji + latin + CJK, matching the glyph + title/body text.
-      final builder = ui.ParagraphBuilder(ui.ParagraphStyle(fontSize: 20))
-        ..addText('📍⛩️📷✍️🎨🌙 记录 Ag');
+      // Latin + CJK, matching the title/body text.
+      final builder = ui.ParagraphBuilder(ui.ParagraphStyle(fontSize: 14))
+        ..addText('记录 Ag');
       final paragraph = builder.build()
         ..layout(const ui.ParagraphConstraints(width: 200));
       canvas.drawParagraph(paragraph, Offset.zero);
@@ -234,8 +232,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
-  /// Warms the glyphs each loaded record's bubble will paint — its marker glyph,
-  /// title, place name and body text (CJK included) — so the *first* tap on a
+  /// Warms the glyphs each loaded record's bubble will paint — its title, place
+  /// name and body text (CJK included) — so the *first* tap on a
   /// given record doesn't stall while CanvasKit shapes and rasterizes those
   /// glyphs onto the atlas for the first time (which is why the same record is
   /// smooth on the second tap, but every *new* record stutters once).
@@ -270,7 +268,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     try {
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
-      // The bubble caps the body at 5 lines; ~200px covers glyph + title + place
+      // The bubble caps the body at 5 lines; ~200px covers title + place
       // + those lines at the bubble's inner width.
       const slot = 200.0;
       const width = 226.0;
@@ -280,16 +278,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         // Match the sizes the real bubble paints at — the glyph atlas is keyed
         // by font size, so warming at a single size wouldn't cache them.
         final pb = ui.ParagraphBuilder(ui.ParagraphStyle(fontSize: 14))
-          ..pushStyle(ui.TextStyle(fontSize: 20)) // marker glyph
-          ..addText('${e.markerGlyph} ')
-          ..pop()
           ..pushStyle(ui.TextStyle(fontSize: 14)) // title
           ..addText('${e.displayTitle}\n')
           ..pop();
         if (place.isNotEmpty) {
           pb
             ..pushStyle(ui.TextStyle(fontSize: 12)) // place name
-            ..addText('📍 $place\n')
+            ..addText('$place\n')
             ..pop();
         }
         if (e.body.isNotEmpty) {
@@ -436,9 +431,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// tapping its cluster bubble.
   String? _panelTripId;
 
-  /// Whether the bottom timeline band (see [TripTimelineBar]) is showing its
-  /// nodes rather than just its header strip. Reset to open with every trip.
-  bool _timelineExpanded = true;
+  /// True while an open trip's floating cards (records panel + timeline) play
+  /// their shrink-and-fade exit; the trip actually closes when it finishes.
+  bool _closingTrip = false;
 
   /// Below this width there's no room for a side panel; a trip tap navigates.
   static const double _panelBreakpoint = 720;
@@ -514,9 +509,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   LatLng _centerShowing(LatLng point, double zoom) {
     final wide = MediaQuery.sizeOf(context).width >= _panelBreakpoint;
     if (!wide || _panelTripId == null) return point;
-    final band = _timelineExpanded
-        ? TripTimelineBar.expandedHeight
-        : TripTimelineBar.collapsedHeight;
+    const band = TripTimelineBar.height;
     final cam = _map.camera.withPosition(center: point, zoom: zoom);
     final size = cam.nonRotatedSize;
     final visible = math.Point<double>(
@@ -549,11 +542,30 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     });
   }
 
-  /// Tapping a timeline dot selects the record on the map and in the panel.
-  void _onTimelineTap(Entry entry) {
+  /// Tapping a record's dot — in the timeline or on the map — selects it on the
+  /// map (centred in the uncovered area) and scrolls the panel to its card.
+  void _selectAndReveal(Entry entry) {
     _hoverPanTimer?.cancel();
     _selectEntry(entry);
     _revealInPanel(entry);
+  }
+
+  /// Closing a trip: the records panel and the timeline first shrink and fade
+  /// out ([_TripCardExit]); [_finishCloseTrip] then actually closes it.
+  void _closeTrip() {
+    if (_closingTrip || _panelTripId == null) return;
+    _hoverPanTimer?.cancel();
+    _timelineHoverN.value = null;
+    setState(() => _closingTrip = true);
+  }
+
+  void _finishCloseTrip() {
+    if (!mounted || !_closingTrip) return;
+    _selectedN.value = null;
+    setState(() {
+      _closingTrip = false;
+      _panelTripId = null;
+    });
   }
 
   void _revealInPanel(Entry entry) {
@@ -610,7 +622,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       setState(() {
         _addingPoint = null;
         _panelTripId = tripId;
-        _timelineExpanded = true;
+        _closingTrip = false;
       });
       _fitTrip(points);
     } else {
@@ -650,9 +662,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     // by exactly the band's footprint, so the band never covers them.
     final wide = MediaQuery.sizeOf(context).width >= _panelBreakpoint;
     final timelineOpen = wide && _panelTripId != null;
-    final bandHeight = _timelineExpanded
-        ? TripTimelineBar.expandedHeight
-        : TripTimelineBar.collapsedHeight;
+    const bandHeight = TripTimelineBar.height;
     // The band's own height, its 20 bottom margin and a 12 gap above it.
     final bottomInset = timelineOpen ? bandHeight + 32 : 0.0;
 
@@ -918,7 +928,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             linkedId: e.id,
                             child: _EntryDot(
                               color: entryColor[e.id] ?? _recordFill,
-                              onTap: () => _selectEntry(e),
+                              onTap: () => _selectAndReveal(e),
                             ),
                           ),
                         ),
@@ -1052,7 +1062,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           right: _panelMargin,
           bottom: _panelMargin + bandHeight + _panelGap,
           width: _panelWidth,
-          child: Material(
+          child: _TripCardExit(
+            closing: _closingTrip,
+            alignment: Alignment.topRight,
+            child: Material(
             elevation: 6,
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
@@ -1063,12 +1076,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               valueListenable: _selectedN,
               builder: (context, selected, _) => TripRecordsPanel(
                 tripId: _panelTripId!,
-                onClose: () => setState(() => _panelTripId = null),
+                onClose: _closeTrip,
                 onRecordTap: _selectEntry,
                 selectedEntryId: selected?.id,
                 reveal: _revealN,
               ),
             ),
+          ),
           ),
         ),
         // The trip's records as one left-to-right timeline along the bottom:
@@ -1079,20 +1093,22 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           right: 20,
           bottom: 20,
           height: bandHeight,
-          child: ValueListenableBuilder<Entry?>(
+          child: _TripCardExit(
+            closing: _closingTrip,
+            alignment: Alignment.bottomCenter,
+            onDone: _finishCloseTrip,
+            child: ValueListenableBuilder<Entry?>(
             valueListenable: _selectedN,
             builder: (context, selected, _) => TripTimelineBar(
               tripId: _panelTripId!,
               dayColor: (day, lastDay) =>
                   _tripDayColor(_panelTripId!, day, lastDay),
-              onNodeTap: _onTimelineTap,
+              onNodeTap: _selectAndReveal,
               onNodeHover: _onTimelineHover,
               selectedEntryId: selected?.id,
-              expanded: _timelineExpanded,
-              onToggleExpanded: () =>
-                  setState(() => _timelineExpanded = !_timelineExpanded),
-              onClose: () => setState(() => _panelTripId = null),
+              onClose: _closeTrip,
             ),
+          ),
           ),
         ),
       ],
@@ -1348,12 +1364,9 @@ class _PulsePainter extends CustomPainter {
 /// its own route leg — see `entryColor` in [_MapScreenState.build].
 const Color _recordFill = Color(0xFFFFA726); // amber-orange (orange 400)
 
-/// Darkens [color] for a dot's rim, so the border reads as a deeper shade of
-/// whatever route colour the dot itself was given rather than a fixed tone.
-Color _darken(Color color, [double amount = 0.25]) {
-  final hsl = HSLColor.fromColor(color);
-  return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
-}
+/// The rim of every record dot on the map: a fixed near-black, independent of
+/// the dot's route colour.
+const Color _dotRim = Color(0xFF262A28);
 
 /// A trip's span as the cluster bubble reads it: `2025.4.3~4.8`. The year is
 /// written once unless the trip crosses into a new one (`2024.12.28~2025.1.3`),
@@ -1596,9 +1609,44 @@ class _EntryDot extends StatelessWidget {
           decoration: BoxDecoration(
             color: color,
             shape: BoxShape.circle,
-            border: Border.all(color: _darken(color), width: 1.4),
+            border: Border.all(color: _dotRim, width: 1.4),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Shrinks [child] towards [alignment] and fades it out while [closing], then
+/// calls [onDone] — the exit of an open trip's floating cards.
+class _TripCardExit extends StatelessWidget {
+  final bool closing;
+  final Alignment alignment;
+  final VoidCallback? onDone;
+  final Widget child;
+
+  static const Duration duration = Duration(milliseconds: 240);
+
+  const _TripCardExit({
+    required this.closing,
+    required this.alignment,
+    required this.child,
+    this.onDone,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedScale(
+      scale: closing ? 0.86 : 1,
+      alignment: alignment,
+      duration: duration,
+      curve: Curves.easeIn,
+      child: AnimatedOpacity(
+        opacity: closing ? 0 : 1,
+        duration: duration,
+        curve: Curves.easeIn,
+        onEnd: closing ? onDone : null,
+        child: child,
       ),
     );
   }
@@ -1704,9 +1752,6 @@ class _ExpandedBubble extends StatelessWidget {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(entry.markerGlyph,
-                                style: const TextStyle(fontSize: 20)),
-                            const SizedBox(width: 8),
                             Expanded(
                               child: Padding(
                                 padding: const EdgeInsets.only(top: 2),
@@ -1727,9 +1772,18 @@ class _ExpandedBubble extends StatelessWidget {
                         if (entry.location != null &&
                             entry.location!.placeName.isNotEmpty) ...[
                           const SizedBox(height: 4),
-                          Text('📍 ${entry.location!.placeName}',
-                              style: TextStyle(
-                                  fontSize: 12, color: theme.hintColor)),
+                          Row(
+                            children: [
+                              Icon(Icons.place_outlined,
+                                  size: 14, color: theme.hintColor),
+                              const SizedBox(width: 2),
+                              Expanded(
+                                child: Text(entry.location!.placeName,
+                                    style: TextStyle(
+                                        fontSize: 12, color: theme.hintColor)),
+                              ),
+                            ],
+                          ),
                         ],
                         if (entry.body.isNotEmpty) ...[
                           const SizedBox(height: 8),

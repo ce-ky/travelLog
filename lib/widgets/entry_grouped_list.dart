@@ -1,15 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../models/entry.dart';
 import '../state/app_state.dart';
 import 'entry_card.dart';
 
-/// A scrollable list of [EntryCard]s grouped under "第N天" day-of-trip
-/// headers (day 1 = [tripStart]), each day chronological and days ascending —
-/// so the list reads as an itinerary. Shared by the trip detail screen and
-/// the trip-records side panel.
+/// A scrollable list of one trip's [EntryCard]s grouped under "DAY n"
+/// day-of-trip headers (day 1 = [tripStart]), each day chronological and days
+/// ascending — so the list reads as an itinerary. Shared by the trip detail
+/// screen and the trip-records side panel; the cards leave out what those
+/// headers already say (see [EntryCard.showTripContext]).
 class EntryGroupedList extends StatefulWidget {
   final List<Entry> entries;
   final DateTime tripStart;
@@ -86,14 +86,13 @@ class _EntryGroupedListState extends State<EntryGroupedList> {
       groups.putIfAbsent(day, () => []).add(e);
     }
     final days = groups.keys.toList()..sort();
-    final fmt = DateFormat('M月d日');
 
     final children = <Widget>[];
     for (final day in days) {
       final items = groups[day]!..sort((a, b) => a.timestamp.compareTo(b.timestamp));
       children.add(Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-        child: Text('第$day天 · ${fmt.format(items.first.timestamp)}',
+        child: Text('DAY $day',
             style: const TextStyle(
                 fontWeight: FontWeight.bold, color: Colors.grey)),
       ));
@@ -106,6 +105,7 @@ class _EntryGroupedListState extends State<EntryGroupedList> {
                 ? null
                 : () => widget.onEntryTap!(e),
             selected: e.id == widget.selectedEntryId,
+            showTripContext: false,
           )));
     }
 

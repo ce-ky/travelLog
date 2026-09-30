@@ -11,10 +11,12 @@ import '../state/app_state.dart';
 ///
 /// The right-hand [TripRecordsPanel] answers "what is in this trip"; this band
 /// answers "when did it happen". It is a true time axis: every day of the trip
-/// is one 24-hour span of equal width, that day's date pill sits on its
-/// midnight, and each record is a small dot placed at its actual clock time —
-/// so gaps in the day (and whole quiet days) read as real gaps. A dot's time
-/// and title appear only in a tooltip while the pointer is on it.
+/// is one 24-hour span of equal width with a tick per hour (6/12/18 labelled),
+/// a light grey arc spans each day from 0h to 24h with "DAY n" at its centre,
+/// and each record is a small dot placed at its actual clock time — so gaps in
+/// the day (and whole quiet days) read as real gaps. The rail, ticks and arcs
+/// stay a neutral light grey whatever the trip's colour. A dot's time and title
+/// appear only in a tooltip while the pointer is on it.
 ///
 /// Hovering a dot reports it through [onNodeHover] (the map pans to it and the
 /// records panel scrolls to it); tapping reports it through [onNodeTap] (the
@@ -37,18 +39,15 @@ class TripTimelineBar extends StatefulWidget {
   /// The record currently expanded on the map, if any.
   final String? selectedEntryId;
 
-  /// False collapses the band to its header strip, freeing the map.
-  final bool expanded;
-
-  final VoidCallback? onToggleExpanded;
-
   /// Closes the trip (and with it this band).
   final VoidCallback? onClose;
 
-  /// Band heights, exported so the map can lift its bottom-left controls and
-  /// shorten the records panel by exactly as much as the band takes.
-  static const double expandedHeight = 186;
-  static const double collapsedHeight = 47;
+  /// The band's height, exported so the map can lift its bottom-left controls
+  /// and shorten the records panel by exactly as much as the band takes.
+  static const double height = 186;
+
+  /// Height of the strip across the top that holds the close button.
+  static const double headerHeight = 47;
 
   const TripTimelineBar({
     super.key,
@@ -57,8 +56,6 @@ class TripTimelineBar extends StatefulWidget {
     this.onNodeTap,
     this.onNodeHover,
     this.selectedEntryId,
-    this.expanded = true,
-    this.onToggleExpanded,
     this.onClose,
   });
 
@@ -70,16 +67,19 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
   /// Width of one hour on the axis; a day is 24 of these.
   static const double _pxPerHour = 12;
 
-  /// Room before the first midnight and after the last, so the end pills
+  /// Room before the first midnight and after the last, so the end labels
   /// aren't clipped by the band's edges.
   static const double _pad = 44;
 
-  /// Top of the marker row, and the rail's centre line within it.
-  static const double _rowTop = 8;
-  static const double _railY = _rowTop + 18;
+  /// The rail's centre line, measured from the top of the scrolling track.
+  static const double _railY = 54;
 
-  /// Hours that get a small tick (and label) on the rail.
-  static const _tickHours = [6, 12, 18];
+  /// How far each day's arc dips below the rail at its centre.
+  static const double _arcDepth = 30;
+
+  /// The neutral greys of the axis: rail and arcs, then the hour ticks.
+  static const Color _railColor = Color(0xFFD5DAD7);
+  static const Color _tickColor = Color(0xFFC3C9C6);
 
   final ScrollController _scroll = ScrollController();
 
@@ -99,7 +99,7 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
   }
 
   void _revealSelected() {
-    if (!mounted || !widget.expanded) return;
+    if (!mounted) return;
     final key = _nodeKeys[widget.selectedEntryId];
     final ctx = key?.currentContext;
     if (ctx == null) return;
@@ -148,51 +148,48 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _header(),
-          if (widget.expanded) ...[
-            Divider(
-                height: 1,
-                thickness: 1,
-                color: theme.dividerColor.withValues(alpha: 0.4)),
-            Expanded(
-              child: entries.isEmpty
-                  ? Center(
-                      child: Text('这趟旅途还没有记录',
-                          style: TextStyle(color: theme.hintColor)))
-                  : Listener(
-                      onPointerSignal: _onPointerSignal,
-                      child: SingleChildScrollView(
+          Expanded(
+            child: entries.isEmpty
+                ? Center(
+                    child: Text('这趟旅途还没有记录',
+                        style: TextStyle(color: theme.hintColor)))
+                : Listener(
+                    onPointerSignal: _onPointerSignal,
+                    // A thin light-grey thumb in place of the platform
+                    // scrollbar (no arrow buttons, whatever the theme).
+                    child: ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(context)
+                          .copyWith(scrollbars: false),
+                      child: RawScrollbar(
                         controller: _scroll,
-                        scrollDirection: Axis.horizontal,
-                        child: _track(theme, entries, trip.startDate,
-                            trip.endDate),
+                        thumbColor: _railColor,
+                        thickness: 6,
+                        radius: const Radius.circular(3),
+                        child: SingleChildScrollView(
+                          controller: _scroll,
+                          scrollDirection: Axis.horizontal,
+                          child: _track(theme, entries, trip.startDate,
+                              trip.endDate),
+                        ),
                       ),
                     ),
-            ),
-          ],
+                  ),
+          ),
         ],
       ),
     );
   }
 
-  /// Just the band's controls: the trip's name and dates are already at the top
+  /// Just the close button: the trip's name and dates are already at the top
   /// of the records panel beside it.
   Widget _header() {
     return SizedBox(
-      height: TripTimelineBar.collapsedHeight,
+      height: TripTimelineBar.headerHeight,
       child: Padding(
         padding: const EdgeInsets.only(right: 6),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            if (widget.onToggleExpanded != null)
-              IconButton(
-                icon: Icon(widget.expanded
-                    ? Icons.keyboard_arrow_down
-                    : Icons.keyboard_arrow_up),
-                tooltip: widget.expanded ? '收起时间线' : '展开时间线',
-                visualDensity: VisualDensity.compact,
-                onPressed: widget.onToggleExpanded,
-              ),
             if (widget.onClose != null)
               IconButton(
                 icon: const Icon(Icons.close),
@@ -206,16 +203,16 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
     );
   }
 
-  /// The whole axis as one fixed-width stack: a rail segment per day in that
-  /// day's route colour, hour ticks, a date pill on every midnight, and a dot
-  /// at each record's time.
+  /// The whole axis as one fixed-width stack: the grey rail with an hour tick
+  /// every hour, a grey arc per day labelled "DAY n", and a dot at each
+  /// record's time.
   Widget _track(ThemeData theme, List<Entry> entries, DateTime start,
       DateTime? end) {
     const dayLen = 24 * _pxPerHour;
     double x(int day, [double hours = 0]) =>
         _pad + (day - 1) * dayLen + hours * _pxPerHour;
 
-    // Colours follow the map: day 1 palest, the last day with records deepest.
+    // Dot colours follow the map: the same per-day route colour.
     final lastDay =
         entries.map((e) => dayIndexInTrip(e.timestamp, start)).reduce(
               (a, b) => a > b ? a : b,
@@ -227,48 +224,50 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
         : (dayIndexInTrip(end, start) > lastDay
             ? dayIndexInTrip(end, start)
             : lastDay);
-    Color colorOf(int day) =>
-        widget.dayColor(day > lastDay ? lastDay : day, lastDay);
 
-    final surface = theme.colorScheme.surface;
-    final children = <Widget>[];
+    final children = <Widget>[
+      // Rail and day arcs, painted in one go under everything else.
+      Positioned.fill(
+        child: CustomPaint(
+          painter: _AxisPainter(
+            days: totalDays,
+            x: x,
+            railY: _railY,
+            arcDepth: _arcDepth,
+            rail: _railColor,
+            tick: _tickColor,
+          ),
+        ),
+      ),
+    ];
 
     for (var d = 1; d <= totalDays; d++) {
-      final c = colorOf(d);
-      children.add(Positioned(
-        left: x(d),
-        top: _railY - 0.5,
-        width: dayLen,
-        height: 1,
-        child: ColoredBox(color: c.withValues(alpha: 0.8)),
-      ));
-      for (final h in _tickHours) {
-        children
-          ..add(Positioned(
-            left: x(d, h.toDouble()) - 0.5,
-            top: _railY - 3,
-            width: 1,
-            height: 6,
-            child: ColoredBox(color: c),
-          ))
-          ..add(Positioned(
-            left: x(d, h.toDouble()) - 12,
-            top: 6,
-            width: 24,
-            child: Text('$h',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 9, color: theme.hintColor)),
-          ));
+      for (final h in const [6, 12, 18]) {
+        children.add(Positioned(
+          left: x(d, h.toDouble()) - 12,
+          top: _railY - 22,
+          width: 24,
+          child: Text('$h',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 9, color: theme.hintColor)),
+        ));
       }
-    }
-
-    for (var d = 1; d <= totalDays; d++) {
-      final date = DateTime(start.year, start.month, start.day + d - 1);
+      // "DAY n" sits on the arc's lowest point, on a patch of surface so the
+      // arc breaks around it.
       children.add(Positioned(
-        left: x(d) - 40,
-        top: _rowTop,
+        left: x(d) + dayLen / 2 - 40,
+        top: _railY + _arcDepth - 8,
         width: 80,
-        child: _dayMarker(theme, d, date, colorOf(d), surface),
+        height: 16,
+        child: Center(
+          child: Container(
+            color: theme.colorScheme.surface,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Text('DAY $d',
+                style: TextStyle(
+                    fontSize: 12, height: 1.3, color: theme.hintColor)),
+          ),
+        ),
       ));
     }
 
@@ -284,7 +283,7 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
         height: hit,
         child: _TimelineDot(
           entry: e,
-          color: colorOf(day),
+          color: widget.dayColor(day, lastDay),
           selected: e.id == widget.selectedEntryId,
           onTap: widget.onNodeTap == null ? null : () => widget.onNodeTap!(e),
           onHover: widget.onNodeHover,
@@ -297,51 +296,68 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
       child: Stack(clipBehavior: Clip.none, children: children),
     );
   }
+}
 
-  /// A day's midnight: its date as an opaque pill sitting on the rail (so the
-  /// rail doesn't show through it), and 第N天 beneath.
-  Widget _dayMarker(
-      ThemeData theme, int day, DateTime date, Color color, Color surface) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: 36,
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                // Pre-mixed onto the band's surface rather than translucent.
-                color: Color.alphaBlend(color.withValues(alpha: 0.16), surface),
-                borderRadius: BorderRadius.circular(9),
-                border: Border.all(
-                    color: Color.alphaBlend(
-                        color.withValues(alpha: 0.55), surface)),
-              ),
-              child: Text(DateFormat('MM-dd').format(date),
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.bold,
-                      color: _readable(theme, color))),
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text('第$day天',
-            style: TextStyle(fontSize: 11, color: theme.hintColor)),
-      ],
-    );
+/// Paints the time axis itself: the rail across every day, a tick per hour
+/// (midnight and 6/12/18 longer), and one shallow arc per day from its 0h to
+/// its 24h, dipping below the rail.
+class _AxisPainter extends CustomPainter {
+  final int days;
+  final double Function(int day, [double hours]) x;
+  final double railY;
+  final double arcDepth;
+  final Color rail;
+  final Color tick;
+
+  _AxisPainter({
+    required this.days,
+    required this.x,
+    required this.railY,
+    required this.arcDepth,
+    required this.rail,
+    required this.tick,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final railPaint = Paint()
+      ..color = rail
+      ..strokeWidth = 1;
+    final tickPaint = Paint()
+      ..color = tick
+      ..strokeWidth = 1;
+    final arcPaint = Paint()
+      ..color = rail
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+
+    canvas.drawLine(Offset(x(1), railY), Offset(x(days + 1), railY), railPaint);
+    for (var d = 1; d <= days; d++) {
+      for (var h = 0; h < 24; h++) {
+        final major = h % 6 == 0;
+        final half = major ? 3.5 : 2.0;
+        final hx = x(d, h.toDouble());
+        canvas.drawLine(
+            Offset(hx, railY - half), Offset(hx, railY + half), tickPaint);
+      }
+      final x0 = x(d), x1 = x(d + 1);
+      // A quadratic curve whose control point sits at twice the depth reaches
+      // exactly [arcDepth] below the rail at its midpoint.
+      canvas.drawPath(
+        Path()
+          ..moveTo(x0, railY)
+          ..quadraticBezierTo((x0 + x1) / 2, railY + 2 * arcDepth, x1, railY),
+        arcPaint,
+      );
+    }
+    final end = x(days + 1);
+    canvas.drawLine(
+        Offset(end, railY - 3.5), Offset(end, railY + 3.5), tickPaint);
   }
 
-  /// The day colour is tuned for a route line on a map; darken the pale end of
-  /// it so the date stays readable as text on the panel's surface.
-  Color _readable(ThemeData theme, Color color) {
-    final hsl = HSLColor.fromColor(color);
-    if (theme.brightness == Brightness.dark) return color;
-    return hsl.lightness <= 0.45
-        ? color
-        : hsl.withLightness(0.35).toColor();
-  }
+  @override
+  bool shouldRepaint(_AxisPainter old) =>
+      old.days != days || old.rail != rail || old.tick != tick;
 }
 
 /// One record on the timeline: a tiny dot that springs up in size while the
