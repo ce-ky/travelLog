@@ -28,11 +28,18 @@ class EntryCard extends StatefulWidget {
   /// map selection into the floating records list so the two stay in sync.
   final bool selected;
 
+  /// False inside a single trip's list (the trip-records panel, the trip
+  /// page), where the trip, its companions and each day are already given by
+  /// the surrounding headers: the card then drops the record type, the
+  /// "time · trip" line and the companions, keeping only the place.
+  final bool showTripContext;
+
   const EntryCard({
     super.key,
     required this.entry,
     this.onTap,
     this.selected = false,
+    this.showTripContext = true,
   });
 
   @override
@@ -90,7 +97,7 @@ class _EntryCardState extends State<EntryCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (entry.hasImage) ...[
-              _ImageStrip(paths: entry.imagePaths, glyph: entry.markerGlyph),
+              _ImageStrip(paths: entry.imagePaths),
               const SizedBox(height: 10),
             ],
             Row(
@@ -111,13 +118,21 @@ class _EntryCardState extends State<EntryCard> {
                       if (entry.body.isNotEmpty)
                         Text(entry.body,
                             maxLines: 4, overflow: TextOverflow.ellipsis),
-                      // With neither title nor body, keep the type as a heading
-                      // so the row never reads as empty.
+                      // With neither title nor body, keep a heading so the row
+                      // never reads as empty.
                       if (title == null && entry.body.isEmpty)
-                        Text(entry.type.label,
+                        Text(
+                            widget.showTripContext
+                                ? entry.type.label
+                                : '记录',
                             style: theme.textTheme.titleMedium),
                       const SizedBox(height: 8),
-                      _MetaRow(entry: entry, trip: trip, dateStr: dateStr),
+                      _MetaRow(
+                        entry: entry,
+                        trip: trip,
+                        dateStr: dateStr,
+                        showTripContext: widget.showTripContext,
+                      ),
                     ],
                   ),
                 ),
@@ -143,9 +158,8 @@ class _EntryCardState extends State<EntryCard> {
 /// equal thumbnails for several.
 class _ImageStrip extends StatelessWidget {
   final List<String> paths;
-  final String glyph;
 
-  const _ImageStrip({required this.paths, required this.glyph});
+  const _ImageStrip({required this.paths});
 
   @override
   Widget build(BuildContext context) {
@@ -189,19 +203,26 @@ class _ImageStrip extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       alignment: Alignment.center,
-      child: Text(glyph, style: const TextStyle(fontSize: 26)),
+      child: Icon(Icons.image_outlined, size: 26, color: theme.hintColor),
     );
   }
 }
 
-/// The compact meta line(s) under a card: type, place, date · trip, companions.
+/// The compact meta line(s) under a card: type, place, date · trip, companions
+/// — or just the place, inside a single trip's list (see
+/// [EntryCard.showTripContext]).
 class _MetaRow extends StatelessWidget {
   final Entry entry;
   final Trip trip;
   final String dateStr;
+  final bool showTripContext;
 
-  const _MetaRow(
-      {required this.entry, required this.trip, required this.dateStr});
+  const _MetaRow({
+    required this.entry,
+    required this.trip,
+    required this.dateStr,
+    required this.showTripContext,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -210,11 +231,13 @@ class _MetaRow extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(entry.type.icon, size: 14, color: Colors.grey),
-            const SizedBox(width: 4),
-            Text(entry.type.label, style: const TextStyle(fontSize: 12)),
+            if (showTripContext) ...[
+              Icon(entry.type.icon, size: 14, color: Colors.grey),
+              const SizedBox(width: 4),
+              Text(entry.type.label, style: const TextStyle(fontSize: 12)),
+            ],
             if (entry.location != null) ...[
-              const SizedBox(width: 8),
+              if (showTripContext) const SizedBox(width: 8),
               const Icon(Icons.place_outlined, size: 14, color: Colors.grey),
               const SizedBox(width: 2),
               Flexible(
@@ -226,12 +249,14 @@ class _MetaRow extends StatelessWidget {
             ],
           ],
         ),
-        const SizedBox(height: 2),
-        Text('$dateStr · ${trip.title}',
-            style: const TextStyle(fontSize: 11, color: Colors.grey)),
-        if (trip.companions.isNotEmpty)
-          Text('与 ${trip.companions.map((p) => p.name).join('、')}',
+        if (showTripContext) ...[
+          const SizedBox(height: 2),
+          Text('$dateStr · ${trip.title}',
               style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          if (trip.companions.isNotEmpty)
+            Text('与 ${trip.companions.map((p) => p.name).join('、')}',
+                style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        ],
       ],
     );
   }

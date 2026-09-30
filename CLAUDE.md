@@ -59,8 +59,10 @@ Screens ──> AppState (ChangeNotifier) ──> TravelRepository (interface)
   zoomed out (below `_recordZoom`) and shows individual records when zoomed in.
   Tapping empty space at street zoom (`_addZoom`) starts a new record there;
   below that, a tap just zooms in. Every record is the same small dot in its
-  route leg's colour (no photo thumbnails on the map); hovering a dot springs it
-  up, and selecting one pops its bubble out of the map point. Trips' daily legs
+  route leg's colour with a fixed near-black rim (no photo thumbnails on the
+  map); hovering a dot springs it up, and tapping one centres it in the area
+  the floating panels leave uncovered, scrolls the records panel to it and
+  pops its bubble out of the map point. No emoji are drawn anywhere. Trips' daily legs
   are joined by route lines and told apart by their cluster colour when zoomed
   out. A zoomed-out cluster bubble reads as the trip's date range
   (`2025.4.3~4.8`, or `~至今` while it's still running) — the trip's name is one
@@ -68,11 +70,17 @@ Screens ──> AppState (ChangeNotifier) ──> TravelRepository (interface)
 - **Trip timeline (`trip_timeline_bar.dart`)** — wide (web/desktop) layout only:
   opening a trip (cluster tap, or a pick in the 旅途 panel) puts a band along the
   bottom of the map. It is a true time axis: each trip day is an equal 24-hour
-  span with its `MM-dd` pill on midnight, and each record is a tiny dot at its
-  clock time (time + title only in the dot's hover tooltip). Hovering a dot
-  highlights its map dot, pans the map and scrolls the records panel to it
-  (centred in the area the panels leave uncovered); tapping selects it. The
+  span with a tick per hour (6/12/18 labelled) and a light grey arc from 0h to
+  24h labelled `DAY n` — the rail, ticks and arcs stay grey whatever the trip
+  colour — and each record is a small dot at its clock time (time + title only
+  in the dot's hover tooltip). Hovering a dot highlights its map dot, pans the
+  map and scrolls the records panel to it; tapping selects it. There's no
+  collapse; closing shrinks the panel and band away, then closes the trip. The
   map's bottom-left controls are lifted by exactly the band's height.
+- **Records panel (`trip_records_panel.dart`)** — the trip's companions are
+  shown once in its header; its cards (`EntryCard(showTripContext: false)`)
+  drop the record type, the "time · trip" line and the companions, and are
+  grouped under `DAY n`.
 - **Auto-trip assignment (`entry_form.dart`)** — a new record with a location
   auto-selects the trip whose nearest existing record is within
   `_autoSelectKm = 50` km; trip chips are ordered nearest-first.
@@ -118,7 +126,9 @@ Don't "clean these up" — they're intentional:
 
 - **Code comments and identifiers are in English; all user-facing strings are in
   Chinese** (e.g. `'新增记录'`, nav titles `['地图','旅途','浏览']`). Match this —
-  don't translate UI strings to English or comments to Chinese.
+  don't translate UI strings to English or comments to Chinese. The one
+  deliberate exception is the day label `DAY n` (timeline arcs and the records
+  panel's day headers).
 - Material 3, seed color `0xFF3D8D7A`. `HomeShell` switches between a phone
   layout and a compact desktop layout at a 720px breakpoint.
 - Widget tests inject `MockTravelRepository` and an offline `TileProvider` so
