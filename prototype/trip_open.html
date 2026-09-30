@@ -622,7 +622,9 @@ function centerPanel(id) {
 function select(id, source) {
   sel = id; render();
   if (!id) return;
-  if (source === 'node' && P.t_hoverLink) { centerMap(id); centerPanel(id); }
+  // A timeline dot (behind the hover-link toggle) or a map dot centres the record
+  // on the map and scrolls the records panel to its card.
+  if ((source === 'node' && P.t_hoverLink) || source === 'map') { centerMap(id); centerPanel(id); }
   const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
   if (P.t_bandFollow) {
     const n = document.querySelector(`[data-node="${id}"]`), row = $('#brow');
