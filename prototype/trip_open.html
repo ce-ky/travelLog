@@ -188,8 +188,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .rseg { position: absolute; height: var(--railW); margin-top: calc(var(--railW) / -2); background: var(--rail); }
 .tick { position: absolute; width: 1px; height: 4px; background: var(--rail-tick); }
 .tick.major { height: 7px; }
-.tickl { position: absolute; top: 4px; transform: translateX(-50%); font-size: 9px; color: var(--hint); opacity: .8; font-variant-numeric: tabular-nums; }
-.tnode { position: absolute; top: 8px; display: flex; flex-direction: column; align-items: center; z-index: 2; }
+.tickl { position: absolute; transform: translateX(-50%); font-size: 9px; color: var(--hint); opacity: .8; font-variant-numeric: tabular-nums; }
+.tnode { position: absolute; display: flex; flex-direction: column; align-items: center; z-index: 2; }
 .dotrow { height: 36px; display: grid; place-items: center; }
 /* Hover tooltip for a timeline dot: the record's time and title, shown only
    while the pointer is on the dot. Lives above the band so it is never clipped. */
@@ -204,7 +204,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .empty { flex: 1; display: grid; place-items: center; color: var(--hint); }
 
 .toast { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); background: #323232; color: #fff; padding: 10px 16px; border-radius: 4px; font-size: 14px; z-index: 30; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+/* Closing a trip: each card shrinks towards its anchor and fades. */
+#panel { transform-origin: 100% 0; }
+#band { transform-origin: 50% 100%; }
+.card-float.closing { animation: cardOut var(--closeMs) cubic-bezier(.4,0,.8,.4) forwards; pointer-events: none; }
+@keyframes cardOut { to { opacity: 0; transform: scale(.86); } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
 @media (max-width: 700px) { #dock { position: absolute; z-index: 60; inset: 0 auto 0 0; width: min(320px, 88vw); } }
 </style>
 
@@ -256,6 +261,8 @@ const PARAMS = [
   ['nodeTitleFs', '节点标题字号', 12, 10, 16, 0.5, '_nodeCell · fontSize: 12', '底部时间线'],
   ['timeFs', '时间字号', 11, 9, 14, 0.5, '_nodeCell · HH:mm fontSize: 11', '底部时间线'],
   ['dayArcFs', '天数字号', 12, 9, 16, 0.5, '新增：天数弧线中心的「第N天」', '底部时间线'],
+  ['axisDrop', '时间轴下移', 28, 0, 90, 1, '新增：时间轴整体离标题栏的额外距离', '底部时间线'],
+  ['closeMs', '关闭时缩小动画时长 (ms)', 240, 80, 800, 10, '新增：关闭旅途时右侧栏与时间线缩小淡出', '布局'],
   ['arcDepth', '天数弧线深度', 30, 12, 80, 1, '新增：0 时到 24 时弧线的下沉高度', '底部时间线'],
   ['railW', '轨道线粗细', 1, 1, 5, 0.5, '_rail · height: 2', '底部时间线'],
   ['panelTitleFs', '旅途标题字号', 22, 16, 28, 1, 'TripRecordsPanel · titleLarge', '右侧记录栏'],
@@ -465,6 +472,7 @@ function render() {
   r.setProperty('--mapDotHoverScale', P.mapDotHoverScale);
   r.setProperty('--dotHit', P.dotHit + 'px');
   r.setProperty('--tipMaxW', P.tipMaxW + 'px');
+  r.setProperty('--closeMs', P.closeMs + 'ms');
   r.setProperty('--bubbleDur', P.bubbleDur + 'ms');
   r.setProperty('--bubbleDelay', P.bubbleDelay + 'ms');
 
@@ -558,7 +566,7 @@ function bandHtml(bandHeight, lastDay) {
   const PAD = 44, dayLen = 24 * P.pxPerHour;
   const totalDays = dayIndex(TRIP.end);
   const X = (d, h = 0) => PAD + (d - 1) * dayLen + h * P.pxPerHour;
-  const RAIL_Y = 26; // centre line of the rail within the track
+  const RAIL_Y = 26 + P.axisDrop; // centre line of the rail within the track
   let html = '';
   const tick = (x, major) => `<i class="tick${major ? ' major' : ''}" style="left:${x}px;top:${RAIL_Y - (major ? 3.5 : 2)}px"></i>`;
   const arcBottom = RAIL_Y + P.arcDepth;
@@ -569,7 +577,7 @@ function bandHtml(bandHeight, lastDay) {
     for (let h = 0; h < 24; h++) {
       const major = h % 6 === 0;
       html += tick(X(d, h), major);
-      if (major && h && P.t_hourTicks) html += `<span class="tickl" style="left:${X(d, h)}px">${h}</span>`;
+      if (major && h && P.t_hourTicks) html += `<span class="tickl" style="left:${X(d, h)}px;top:${RAIL_Y - 22}px">${h}</span>`;
     }
     // The day's arc: from this midnight to the next, dipping below the rail.
     const x0 = X(d), x1 = X(d + 1), xm = (x0 + x1) / 2;
@@ -586,7 +594,7 @@ function bandHtml(bandHeight, lastDay) {
     if (!it.day) {
       const e = it.e, d = dayIndex(e.ts), c = dayColor(d, lastDay);
       const s = e.id === sel, dd = s ? P.dotSelD : P.dotD;
-      html += `<div class="tnode ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="left:${it.x - P.dotHit / 2}px;width:${P.dotHit}px">
+      html += `<div class="tnode ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="left:${it.x - P.dotHit / 2}px;top:${RAIL_Y - 18}px;width:${P.dotHit}px">
         <div class="dotrow"><span class="hit"><span class="dot" style="width:${dd}px;height:${dd}px;background:${rgb(c)};border:${s ? 1.5 : 1}px solid var(--surface);${s ? `box-shadow:0 0 0 1px ${rgb(c)}, 0 0 5px 1px ${rgb(c, .45)};` : ''}"></span></span></div></div>`;
     }
   }
@@ -594,7 +602,6 @@ function bandHtml(bandHeight, lastDay) {
   return `<section id="band" class="card-float" style="left:${P.margin}px;right:${P.margin}px;bottom:${P.margin}px;height:${bandHeight}px">
     <div class="bh">${P.t_bandShowTitle ? `<span class="ms ic" style="color:${acc}">timeline</span><span class="ti">${esc(S('bandTitle', { trip: TRIP.title }))}</span>
       <span class="n">${esc(S('bandCount', { n: entries.length }))}</span>` : ''}<span class="sp"></span>
-      <button class="ibtn cmp" data-act="toggleBand" title="${esc(expanded ? S('collapse') : S('expand'))}"><span class="ms">${expanded ? 'keyboard_arrow_down' : 'keyboard_arrow_up'}</span></button>
       <button class="ibtn cmp" data-act="closeTrip" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
     ${expanded ? `${entries.length ? `<div id="brow">${cells}</div>` : `<div class="empty">${esc(S('bandEmpty'))}</div>`}` : ''}</section>`;
 }
@@ -633,6 +640,18 @@ function select(id, source) {
   if (P.t_panelFollow && source !== 'card') {
     document.querySelector(`[data-card="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: smooth });
   }
+}
+// Closing a trip: the records panel and the timeline shrink towards their
+// anchored corners and fade out, then the trip actually closes.
+let closing = false;
+function closeTrip() {
+  if (closing) return;
+  const els = [$('#panel'), $('#band')].filter(Boolean);
+  if (!els.length) { tripOpen = false; render(); return; }
+  closing = true;
+  hideTip();
+  els.forEach(el => el.classList.add('closing'));
+  setTimeout(() => { closing = false; tripOpen = false; sel = null; render(); }, P.closeMs);
 }
 function toast(msg) {
   document.querySelector('.toast')?.remove();
@@ -673,7 +692,7 @@ app.addEventListener('click', ev => {
     ev.stopPropagation();
     const act = a.dataset.act;
     if (act === 'desel') select(null);
-    else if (act === 'closeTrip') { tripOpen = false; render(); }
+    else if (act === 'closeTrip') closeTrip();
     else if (act === 'trips') { if (!tripOpen) { tripOpen = true; render(); } else toast('在真实应用里，这里打开「旅途」列表面板'); }
     else if (act === 'toggleBand') { expanded = !expanded; render(); }
     else if (act === 'toast') toast(a.dataset.msg);
