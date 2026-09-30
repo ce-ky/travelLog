@@ -1376,15 +1376,16 @@ Color _tripColor(String tripId) {
   return HSLColor.fromAHSL(1, hue, 0.55, 0.45).toColor();
 }
 
-/// [_tripColor]'s hue, but lightened for day 1 and darkened towards
-/// [lastDay] — so a trip's daily route legs read in order (pale → deep) while
-/// distinct trips are still told apart by hue as before. A single-day trip
-/// (lastDay == 1) just gets [_tripColor] unchanged.
+/// [_tripColor]'s hue, stepping in lightness from day 1 to [lastDay] — a
+/// gentle deep → light progression (0.43 → 0.57) so a trip's daily route legs
+/// read in order without any day fading out, while distinct trips are still
+/// told apart by hue. A single-day trip (lastDay == 1) just gets [_tripColor]
+/// unchanged.
 Color _tripDayColor(String tripId, int day, int lastDay) {
   final hue = (tripId.hashCode % 360).abs().toDouble();
   if (lastDay <= 1) return HSLColor.fromAHSL(1, hue, 0.55, 0.45).toColor();
   final t = (day - 1) / (lastDay - 1); // 0 (day 1) .. 1 (lastDay)
-  final lightness = 0.7 - 0.4 * t; // 0.70 (pale) .. 0.30 (deep)
+  final lightness = 0.43 + 0.14 * t; // 0.43 (day 1) .. 0.57 (last day)
   return HSLColor.fromAHSL(1, hue, 0.55, lightness).toColor();
 }
 

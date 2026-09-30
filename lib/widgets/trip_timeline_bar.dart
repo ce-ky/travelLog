@@ -47,8 +47,8 @@ class TripTimelineBar extends StatefulWidget {
 
   /// Band heights, exported so the map can lift its bottom-left controls and
   /// shorten the records panel by exactly as much as the band takes.
-  static const double expandedHeight = 112;
-  static const double collapsedHeight = 44;
+  static const double expandedHeight = 186;
+  static const double collapsedHeight = 47;
 
   const TripTimelineBar({
     super.key,
@@ -68,7 +68,7 @@ class TripTimelineBar extends StatefulWidget {
 
 class _TripTimelineBarState extends State<TripTimelineBar> {
   /// Width of one hour on the axis; a day is 24 of these.
-  static const double _pxPerHour = 36;
+  static const double _pxPerHour = 12;
 
   /// Room before the first midnight and after the last, so the end pills
   /// aren't clipped by the band's edges.
@@ -237,10 +237,10 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
       final c = colorOf(d);
       children.add(Positioned(
         left: x(d),
-        top: _railY - 1,
+        top: _railY - 0.5,
         width: dayLen,
-        height: 2,
-        child: ColoredBox(color: c.withValues(alpha: 0.45)),
+        height: 1,
+        child: ColoredBox(color: c.withValues(alpha: 0.8)),
       ));
       for (final h in _tickHours) {
         children
@@ -249,7 +249,7 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
             top: _railY - 3,
             width: 1,
             height: 6,
-            child: ColoredBox(color: c.withValues(alpha: 0.65)),
+            child: ColoredBox(color: c),
           ))
           ..add(Positioned(
             left: x(d, h.toDouble()) - 12,
@@ -320,7 +320,7 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
               ),
               child: Text(DateFormat('MM-dd').format(date),
                   style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.bold,
                       color: _readable(theme, color))),
             ),
@@ -350,8 +350,8 @@ class _TripTimelineBarState extends State<TripTimelineBar> {
 /// does nothing — only the dot's own neighbourhood reacts.
 class _TimelineDot extends StatefulWidget {
   static const double hitSize = 22;
-  static const double size = 6;
-  static const double selectedSize = 9;
+  static const double size = 12;
+  static const double selectedSize = 13;
   static const double hoverScale = 1.8;
 
   final Entry entry;
