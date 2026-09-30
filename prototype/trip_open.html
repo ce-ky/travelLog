@@ -278,9 +278,9 @@ const STRINGS = [
   ['bandEmpty', '时间线空状态', '这趟旅途还没有记录', ''],
   ['collapse', '收起按钮提示', '收起时间线', ''],
   ['expand', '展开按钮提示', '展开时间线', ''],
-  ['dayArc', '天数弧线文字', '第{n}天', '{n}'],
+  ['dayArc', '天数弧线文字', 'DAY {n}', '{n}'],
   ['panelDates', '右侧栏日期行', '{start} – {end} · {n} 条记录', '{start} {end} {n}'],
-  ['dayHeader', '分组标题', '第{n}天', '{n} {m} {d}'],
+  ['dayHeader', '分组标题', 'DAY {n}', '{n} {m} {d}'],
   ['companions', '同行者（右侧栏标题下）', '与 {names}', '{names}'],
   ['confirmDelete', '删除二次确认', '是否确认？', ''],
   ['close', '关闭按钮提示', '关闭', ''],
@@ -302,7 +302,8 @@ const STORE = 'travellog-proto-v1';
 try { const saved = JSON.parse(localStorage.getItem(STORE) || '{}'); // Old defaults saved by v1 of this page yield to the new ones.
   if (saved.s_dayPill === '第{n}天') delete saved.s_dayPill;
   if (saved.s_dayDate === '{m}月{d}日') delete saved.s_dayDate;
-  if (saved.s_dayHeader === '第{n}天 · {m}月{d}日') delete saved.s_dayHeader;
+  if (['第{n}天 · {m}月{d}日', '第{n}天'].includes(saved.s_dayHeader)) delete saved.s_dayHeader;
+  if (saved.s_dayArc === '第{n}天') delete saved.s_dayArc;
   if ([26, 10].includes(saved.dotD)) delete saved.dotD;
   if (saved.bandH === 148) delete saved.bandH;
   if ([32, 14].includes(saved.dotSelD)) delete saved.dotSelD;
