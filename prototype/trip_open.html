@@ -26,6 +26,9 @@
   --park: #cdebb0;
   --road: #ffffff;
   --road-edge: #e0dcd4;
+  --rail: #d5dad7;
+  --rail-tick: #c3c9c6;
+  --dot-rim: #262a28;
   /* tuning drawer (outside the app) */
   --dock-bg: #1e2422;
   --dock-fg: #e3e9e6;
@@ -112,11 +115,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .bubble .cnt .ms { font-size: 12px; }
 .bubble .bd { padding: 8px 4px 12px 12px; }
 .bubble .hd { display: flex; gap: 8px; align-items: flex-start; }
-.bubble .hd .g { font-size: 20px; }
-.bubble .hd .tt { flex: 1; font-size: 14px; font-weight: 500; padding-top: 2px; }
+.bubble .hd .tt { flex: 1; font-size: 14px; font-weight: 500; padding-top: 4px; }
 .bubble .hd button { padding: 4px; border-radius: 50%; }
 .bubble .hd button .ms { font-size: 18px; }
-.bubble .pl { font-size: 12px; color: var(--hint); margin-top: 4px; }
+.bubble .pl { font-size: 12px; color: var(--hint); margin-top: 4px; display: flex; align-items: center; gap: 2px; }
+.bubble .pl .ms { font-size: 14px; }
 .bubble .bo { margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.45; }
 .cluster { position: absolute; transform: translate(-50%, -100%); margin-top: -10px; cursor: pointer; }
 .cluster .frost { display: flex; align-items: center; gap: 6px; padding: 8px 10px; white-space: nowrap; font-size: 13px; font-weight: 500; color: rgba(0,0,0,.87); }
@@ -143,6 +146,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 #panel .ph-head .tx { flex: 1; min-width: 0; }
 #panel .ph-title { font-size: var(--panelTitleFs); line-height: 1.27; }
 #panel .ph-sub { font-size: var(--panelSubFs); color: var(--hint); margin-top: 4px; }
+#panel .ph-with { display: flex; align-items: center; gap: 4px; }
+#panel .ph-with .ms { font-size: 15px; }
 #plist { position: relative; flex: 1; overflow-y: auto; padding-bottom: 12px; }
 .dayh { padding: 16px 16px 4px; font-weight: 700; color: var(--grey); font-size: var(--dayHeaderFs); }
 .ecard { margin: 6px 12px; border-radius: 12px; background: var(--surface-low); box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 1px 3px rgba(0,0,0,.1); padding: 12px 4px 12px 12px; cursor: pointer; border: 1.5px solid transparent; transition: background .15s; }
@@ -167,13 +172,24 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 #band .bh .ti { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 #band .bh .n { font-size: 11px; color: var(--hint); margin-left: 8px; white-space: nowrap; }
 #band .bh .sp { flex: 1; }
-#brow { flex: 1; overflow-x: auto; overflow-y: hidden; display: flex; scrollbar-width: thin; }
+#brow { flex: 1; overflow-x: auto; overflow-y: hidden; display: flex; }
+/* Light grey scrollbar with no arrow buttons (Chrome/Edge/Safari). */
+#brow::-webkit-scrollbar { height: 6px; }
+#brow::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+#brow::-webkit-scrollbar-track { background: transparent; }
+#brow::-webkit-scrollbar-thumb { background: var(--rail); border-radius: 3px; }
+#brow::-webkit-scrollbar-thumb:hover { background: var(--rail-tick); }
+@supports not selector(::-webkit-scrollbar) { #brow { scrollbar-width: thin; scrollbar-color: var(--rail) transparent; } }
+.arcs { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.arcs path { fill: none; stroke: var(--rail); stroke-width: 1; }
+.dayl { position: absolute; transform: translate(-50%, -50%); padding: 0 6px; background: var(--surface); color: var(--hint); font-size: var(--dayArcFs); white-space: nowrap; }
 .track { position: relative; flex: none; height: 100%; }
-.seg { position: absolute; height: var(--railW); margin-top: calc(var(--railW) / -2); }
-.tick { position: absolute; width: 1px; height: 6px; }
-.tickl { position: absolute; top: 6px; transform: translateX(-50%); font-size: 9px; color: var(--hint); opacity: .8; font-variant-numeric: tabular-nums; }
-.tday { position: absolute; top: 8px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; z-index: 1; }
-.tnode { position: absolute; top: 8px; display: flex; flex-direction: column; align-items: center; z-index: 2; }
+/* The time rail and its hour ticks stay a neutral light grey whatever the trip's colour. */
+.rseg { position: absolute; height: var(--railW); margin-top: calc(var(--railW) / -2); background: var(--rail); }
+.tick { position: absolute; width: 1px; height: 4px; background: var(--rail-tick); }
+.tick.major { height: 7px; }
+.tickl { position: absolute; transform: translateX(-50%); font-size: 9px; color: var(--hint); opacity: .8; font-variant-numeric: tabular-nums; }
+.tnode { position: absolute; display: flex; flex-direction: column; align-items: center; z-index: 2; }
 .dotrow { height: 36px; display: grid; place-items: center; }
 /* Hover tooltip for a timeline dot: the record's time and title, shown only
    while the pointer is on the dot. Lives above the band so it is never clipped. */
@@ -182,15 +198,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 #tip .tm { font-size: var(--timeFs); color: var(--hint); font-variant-numeric: tabular-nums; line-height: 1.3; }
 #tip .lb { font-size: var(--nodeTitleFs); font-weight: 600; color: var(--on-surface); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 @keyframes tipIn { from { opacity: 0; transform: translateY(4px) scale(.94); } to { opacity: 1; transform: none; } }
-.tday .dd { height: 16px; margin-top: 4px; line-height: 16px; font-size: 11px; color: var(--hint); white-space: nowrap; }
 .hit { display: grid; place-items: center; width: var(--dotHit); height: var(--dotHit); border-radius: 50%; cursor: pointer; }
 .dot { display: block; border-radius: 50%; box-sizing: border-box; transition: width .15s, height .15s, transform .18s cubic-bezier(.2,.9,.3,1.4); }
 .hit:hover .dot { transform: scale(var(--dotHoverScale)); }
-.pill { padding: 3px 8px; border-radius: 9px; font-weight: 700; font-size: var(--dayPillFs); white-space: nowrap; }
 .empty { flex: 1; display: grid; place-items: center; color: var(--hint); }
 
 .toast { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); background: #323232; color: #fff; padding: 10px 16px; border-radius: 4px; font-size: 14px; z-index: 30; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+/* Closing a trip: each card shrinks towards its anchor and fades. */
+#panel { transform-origin: 100% 0; }
+#band { transform-origin: 50% 100%; }
+.card-float.closing { animation: cardOut var(--closeMs) cubic-bezier(.4,0,.8,.4) forwards; pointer-events: none; }
+@keyframes cardOut { to { opacity: 0; transform: scale(.86); } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
 @media (max-width: 700px) { #dock { position: absolute; z-index: 60; inset: 0 auto 0 0; width: min(320px, 88vw); } }
 </style>
 
@@ -228,22 +247,24 @@ const PARAMS = [
   ['margin', '浮层外边距', 20, 8, 40, 1, 'map_screen.dart · top/right/bottom: 20', '布局'],
   ['gap', '右侧栏与时间线间距', 12, 0, 32, 1, 'map_screen.dart · bandHeight + 12', '布局'],
   ['radius', '浮层圆角', 16, 0, 28, 1, 'BorderRadius.circular(16)', '布局'],
-  ['bandH', '时间线展开高度', 112, 80, 240, 2, 'TripTimelineBar.expandedHeight', '底部时间线'],
-  ['bandCollapsedH', '时间线收起高度 / 标题栏高', 44, 36, 60, 1, 'TripTimelineBar.collapsedHeight', '底部时间线'],
-  ['pxPerHour', '每小时宽度 (px)', 36, 8, 120, 1, '新增：按 24h 等比的时间轴（每天 = 24 × 该值）', '底部时间线'],
+  ['bandH', '时间线展开高度', 186, 80, 240, 2, 'TripTimelineBar.expandedHeight', '底部时间线'],
+  ['bandCollapsedH', '时间线收起高度 / 标题栏高', 47, 36, 60, 1, 'TripTimelineBar.collapsedHeight', '底部时间线'],
+  ['pxPerHour', '每小时宽度 (px)', 12, 8, 120, 1, '新增：按 24h 等比的时间轴（每天 = 24 × 该值）', '底部时间线'],
   ['mapDotHoverScale', '地图圆点悬浮放大倍数', 1.8, 1, 3, 0.1, '新增：地图 _EntryDot 悬浮态（含时间线联动）', '地图气泡'],
   ['tipMaxW', '悬浮气泡最大宽度', 180, 100, 320, 4, '新增：dot 悬浮气泡（时间 + 标题）', '底部时间线'],
-  ['dotD', '节点圆点直径', 6, 3, 24, 1, '_nodeCell · d（原 26）', '底部时间线'],
-  ['dotSelD', '选中圆点直径', 9, 4, 30, 1, '_nodeCell · d selected（原 32）', '底部时间线'],
+  ['dotD', '节点圆点直径', 12, 3, 24, 1, '_nodeCell · d（原 26）', '底部时间线'],
+  ['dotSelD', '选中圆点直径', 13, 4, 30, 1, '_nodeCell · d selected（原 32）', '底部时间线'],
   ['bubbleDur', '地图气泡弹出时长 (ms)', 320, 100, 800, 10, '新增：_ExpandedBubble 弹出动画', '地图气泡'],
   ['bubbleDelay', '气泡弹出延迟 (ms)', 180, 0, 600, 10, '新增：等地图开始平移后再弹出', '地图气泡'],
   ['dotHit', '圆点悬浮感应范围', 22, 8, 40, 1, '新增：dot 周边的 hover/点击热区', '底部时间线'],
   ['dotHoverScale', '鼠标移入放大倍数', 1.8, 1, 3, 0.1, '新增：hover 放大动画', '底部时间线'],
   ['nodeTitleFs', '节点标题字号', 12, 10, 16, 0.5, '_nodeCell · fontSize: 12', '底部时间线'],
   ['timeFs', '时间字号', 11, 9, 14, 0.5, '_nodeCell · HH:mm fontSize: 11', '底部时间线'],
-  ['dayPillFs', '日期胶囊字号', 11, 9, 14, 0.5, '_dayCell · fontSize: 11', '底部时间线'],
-  ['railW', '轨道线粗细', 2, 1, 5, 0.5, '_rail · height: 2', '底部时间线'],
-  ['railAlpha', '轨道线不透明度', 0.45, 0.1, 1, 0.05, '_rail · alpha: 0.45', '底部时间线'],
+  ['dayArcFs', '天数字号', 12, 9, 16, 0.5, '新增：天数弧线中心的「第N天」', '底部时间线'],
+  ['axisDrop', '时间轴下移', 28, 0, 90, 1, '新增：时间轴整体离标题栏的额外距离', '底部时间线'],
+  ['closeMs', '关闭时缩小动画时长 (ms)', 240, 80, 800, 10, '新增：关闭旅途时右侧栏与时间线缩小淡出', '布局'],
+  ['arcDepth', '天数弧线深度', 30, 12, 80, 1, '新增：0 时到 24 时弧线的下沉高度', '底部时间线'],
+  ['railW', '轨道线粗细', 1, 1, 5, 0.5, '_rail · height: 2', '底部时间线'],
   ['panelTitleFs', '旅途标题字号', 22, 16, 28, 1, 'TripRecordsPanel · titleLarge', '右侧记录栏'],
   ['panelSubFs', '日期行字号', 12, 10, 15, 0.5, 'TripRecordsPanel · fontSize: 12', '右侧记录栏'],
   ['dayHeaderFs', '「第N天」分组字号', 14, 11, 18, 0.5, 'EntryGroupedList · day header', '右侧记录栏'],
@@ -252,9 +273,9 @@ const PARAMS = [
   ['cardBodyLines', '正文最多行数', 4, 1, 8, 1, 'EntryCard · maxLines: 4', '右侧记录栏'],
   ['cardImgH', '单图高度', 168, 80, 240, 4, '_ImageStrip · height: 168', '右侧记录栏'],
   ['cardMultiImgH', '多图高度', 92, 56, 160, 2, '_ImageStrip · height: 92', '右侧记录栏'],
-  ['tripHue', '旅途色相 (H)', 200, 0, 359, 1, '_tripColor · hue 由 trip.id 哈希决定', '颜色'],
-  ['dayLightStart', '第1天亮度 (L)', 0.70, 0.3, 0.9, 0.01, '_tripDayColor · 0.70', '颜色'],
-  ['dayLightEnd', '最后一天亮度 (L)', 0.30, 0.15, 0.7, 0.01, '_tripDayColor · 0.30', '颜色'],
+  ['tripHue', '旅途色相 (H)', 108, 0, 359, 1, '_tripColor · hue 由 trip.id 哈希决定', '颜色'],
+  ['dayLightStart', '第1天亮度 (L)', 0.43, 0.3, 0.9, 0.01, '_tripDayColor · 0.70', '颜色'],
+  ['dayLightEnd', '最后一天亮度 (L)', 0.57, 0.15, 0.7, 0.01, '_tripDayColor · 0.30', '颜色'],
 ];
 const STRINGS = [
   // [key, label, default, placeholders]
@@ -264,11 +285,10 @@ const STRINGS = [
   ['bandEmpty', '时间线空状态', '这趟旅途还没有记录', ''],
   ['collapse', '收起按钮提示', '收起时间线', ''],
   ['expand', '展开按钮提示', '展开时间线', ''],
-  ['dayPill', '日期胶囊', '{mm}-{dd}', '{mm} {dd} {n}'],
-  ['dayDate', '胶囊下小字', '第{n}天', '{n} {m} {d} {mm} {dd}'],
+  ['dayArc', '天数弧线文字', 'DAY {n}', '{n}'],
   ['panelDates', '右侧栏日期行', '{start} – {end} · {n} 条记录', '{start} {end} {n}'],
-  ['dayHeader', '分组标题', '第{n}天 · {m}月{d}日', '{n} {m} {d}'],
-  ['companions', '同行者行', '与 {names}', '{names}'],
+  ['dayHeader', '分组标题', 'DAY {n}', '{n} {m} {d}'],
+  ['companions', '同行者（右侧栏标题下）', '与 {names}', '{names}'],
   ['confirmDelete', '删除二次确认', '是否确认？', ''],
   ['close', '关闭按钮提示', '关闭', ''],
 ];
@@ -276,7 +296,7 @@ const TOGGLES = [
   ['hoverLink', '移入圆点联动地图与右侧栏', true, '新增：移入圆点时地图平移、右侧栏滚动，使该记录居中；点击时两处同时展开选中'],
   ['panelFollow', '右侧栏跟随选中滚动', false, '现状：只有时间线会把选中项滚到中间，右侧栏不动'],
   ['bandShowTitle', '时间线标题栏显示左侧内容', false, '已去掉图标、「旅途名 · 时间线」和「N 个节点」，勾选可对比原样'],
-  ['hourTicks', '显示 6 / 12 / 18 点刻度', true, '新增：时间轴上的小时刻度'],
+  ['hourTicks', '显示 6 / 12 / 18 点标注', true, '每小时一个刻度；只有 6 / 12 / 18 点带数字'],
   ['bandFollow', '时间线跟随选中滚动', true, '现状：开启（Scrollable.ensureVisible alignment 0.5）'],
 ];
 
@@ -289,6 +309,8 @@ const STORE = 'travellog-proto-v1';
 try { const saved = JSON.parse(localStorage.getItem(STORE) || '{}'); // Old defaults saved by v1 of this page yield to the new ones.
   if (saved.s_dayPill === '第{n}天') delete saved.s_dayPill;
   if (saved.s_dayDate === '{m}月{d}日') delete saved.s_dayDate;
+  if (['第{n}天 · {m}月{d}日', '第{n}天'].includes(saved.s_dayHeader)) delete saved.s_dayHeader;
+  if (saved.s_dayArc === '第{n}天') delete saved.s_dayArc;
   if ([26, 10].includes(saved.dotD)) delete saved.dotD;
   if (saved.bandH === 148) delete saved.bandH;
   if ([32, 14].includes(saved.dotSelD)) delete saved.dotSelD;
@@ -303,23 +325,23 @@ const TYPES = {
   story: ['故事', 'auto_stories'], essay: ['随笔', 'edit_note'],
 };
 const SEED = [
-  { id: 'e1', type: 'place', title: '伏见稻荷大社', body: '千本鸟居，清晨人少的时候最好看。', t: [3, 9, 30], lat: 34.9671, lng: 135.7727, place: '伏见稻荷大社', g: '⛩️', imgs: 0 },
-  { id: 'e2', type: 'photo', title: '', body: '参道边的狐狸乌冬，油扬很甜。', t: [3, 12, 40], lat: 34.9688, lng: 135.7702, place: '稻荷参道', g: '🍜', imgs: 1 },
-  { id: 'e3', type: 'place', title: '东福寺', body: '通天桥上的枫叶还没红，绿得很安静。', t: [3, 16, 10], lat: 34.9767, lng: 135.7738, place: '东福寺', g: '🍁', imgs: 0 },
-  { id: 'e4', type: 'place', title: '清水寺', body: '清水舞台人很多，往下看是一片新绿。', t: [4, 10, 0], lat: 34.9949, lng: 135.7850, place: '清水寺', g: '🏯', imgs: 0 },
-  { id: 'e5', type: 'photo', title: '鸭川边的午后', body: '', t: [4, 15, 10], lat: 35.0116, lng: 135.7681, place: '鸭川', g: '📷', imgs: 2 },
-  { id: 'e6', type: 'drawing', title: '岚山竹林速写', body: '', t: [5, 11, 0], lat: 35.0170, lng: 135.6717, place: '岚山', g: '🎨', imgs: 1 },
-  { id: 'e7', type: 'essay', title: '关于旅行的意义', body: '走得越远，越明白自己想留下的其实是那些说不清的瞬间……', t: [5, 21, 0], lat: 35.0036, lng: 135.7780, place: '祇园', g: '✍️', imgs: 0 },
-  { id: 'e8', type: 'story', title: '', body: '哲学之道的樱花落了一地，阿宽说明年还要再来。', t: [6, 8, 30], lat: 35.0270, lng: 135.7940, place: '哲学之道', g: '🌸', imgs: 0 },
-  { id: 'e9', type: 'photo', title: '金阁寺', body: '', t: [6, 14, 0], lat: 35.0394, lng: 135.7292, place: '金阁寺', g: '✨', imgs: 3 },
-  { id: 'e10', type: 'story', title: '', body: '临走前在京都站买了八桥，小林一路上吃掉了半盒。', t: [8, 10, 20], lat: 34.9858, lng: 135.7588, place: '京都站', g: '🚄', imgs: 0 },
+  { id: 'e1', type: 'place', title: '伏见稻荷大社', body: '千本鸟居，清晨人少的时候最好看。', t: [3, 9, 30], lat: 34.9671, lng: 135.7727, place: '伏见稻荷大社', imgs: 0 },
+  { id: 'e2', type: 'photo', title: '', body: '参道边的狐狸乌冬，油扬很甜。', t: [3, 12, 40], lat: 34.9688, lng: 135.7702, place: '稻荷参道', imgs: 1 },
+  { id: 'e3', type: 'place', title: '东福寺', body: '通天桥上的枫叶还没红，绿得很安静。', t: [3, 16, 10], lat: 34.9767, lng: 135.7738, place: '东福寺', imgs: 0 },
+  { id: 'e4', type: 'place', title: '清水寺', body: '清水舞台人很多，往下看是一片新绿。', t: [4, 10, 0], lat: 34.9949, lng: 135.7850, place: '清水寺', imgs: 0 },
+  { id: 'e5', type: 'photo', title: '鸭川边的午后', body: '', t: [4, 15, 10], lat: 35.0116, lng: 135.7681, place: '鸭川', imgs: 2 },
+  { id: 'e6', type: 'drawing', title: '岚山竹林速写', body: '', t: [5, 11, 0], lat: 35.0170, lng: 135.6717, place: '岚山', imgs: 1 },
+  { id: 'e7', type: 'essay', title: '关于旅行的意义', body: '走得越远，越明白自己想留下的其实是那些说不清的瞬间……', t: [5, 21, 0], lat: 35.0036, lng: 135.7780, place: '祇园', imgs: 0 },
+  { id: 'e8', type: 'story', title: '', body: '哲学之道的樱花落了一地，阿宽说明年还要再来。', t: [6, 8, 30], lat: 35.0270, lng: 135.7940, place: '哲学之道', imgs: 0 },
+  { id: 'e9', type: 'photo', title: '金阁寺', body: '', t: [6, 14, 0], lat: 35.0394, lng: 135.7292, place: '金阁寺', imgs: 3 },
+  { id: 'e10', type: 'story', title: '', body: '临走前在京都站买了八桥，小林一路上吃掉了半盒。', t: [8, 10, 20], lat: 34.9858, lng: 135.7588, place: '京都站', imgs: 0 },
 ];
 let entries = [];
 function resetData() {
   entries = SEED.map(e => ({ ...e, ts: new Date(2025, 3, e.t[0], e.t[1], e.t[2]) }));
 }
 resetData();
-const displayTitle = e => e.title || e.place || (e.body.length > 30 ? e.body.slice(0, 30) + '…' : e.body) || TYPES[e.type][0];
+const displayTitle = e => e.title || e.place || (e.body.length > 30 ? e.body.slice(0, 30) + '…' : e.body) || '记录';
 const dayIndex = ts => Math.max(1, Math.round((new Date(ts.getFullYear(), ts.getMonth(), ts.getDate()) - TRIP.start) / 864e5) + 1);
 const pad = n => String(n).padStart(2, '0');
 const dv = (n, f) => ({ n, m: f.getMonth() + 1, d: f.getDate(), mm: pad(f.getMonth() + 1), dd: pad(f.getDate()) });
@@ -443,13 +465,14 @@ function render() {
   hideTip();
   const bodyScroll = $('#plist')?.scrollTop, bandScroll = $('#brow')?.scrollLeft;
   const r = document.documentElement.style;
-  ['radius', 'panelTitleFs', 'panelSubFs', 'dayHeaderFs', 'cardTitleFs', 'cardBodyFs', 'nodeTitleFs', 'timeFs', 'dayPillFs', 'railW', 'bandCollapsedH']
+  ['radius', 'panelTitleFs', 'panelSubFs', 'dayHeaderFs', 'cardTitleFs', 'cardBodyFs', 'nodeTitleFs', 'timeFs', 'dayArcFs', 'railW', 'bandCollapsedH']
     .forEach(k => r.setProperty('--' + k, P[k] + 'px'));
   r.setProperty('--cardBodyLines', P.cardBodyLines);
   r.setProperty('--dotHoverScale', P.dotHoverScale);
   r.setProperty('--mapDotHoverScale', P.mapDotHoverScale);
   r.setProperty('--dotHit', P.dotHit + 'px');
   r.setProperty('--tipMaxW', P.tipMaxW + 'px');
+  r.setProperty('--closeMs', P.closeMs + 'ms');
   r.setProperty('--bubbleDur', P.bubbleDur + 'ms');
   r.setProperty('--bubbleDelay', P.bubbleDelay + 'ms');
 
@@ -464,7 +487,7 @@ function render() {
   const byTime = [...entries].sort((a, b) => a.ts - b.ts);
   for (const e of byTime) {
     const [x, y] = p(e.lat, e.lng), d = dayIndex(e.ts);
-    h += `<div class="mk mk-dot" data-sel="${e.id}" style="left:${x}px;top:${y}px;background:${rgb(dayColor(d, lastDay))};border:1.4px solid ${rgb(darken(d, lastDay))}"></div>`;
+    h += `<div class="mk mk-dot" data-sel="${e.id}" style="left:${x}px;top:${y}px;background:${rgb(dayColor(d, lastDay))};border:1.4px solid var(--dot-rim)"></div>`;
   }
   const se = entries.find(e => e.id === sel);
   if (!se) poppedId = null;
@@ -472,9 +495,9 @@ function render() {
     const [x, y] = p(se.lat, se.lng);
     const pop = poppedId !== se.id; poppedId = se.id;
     h += `<div class="bubble${pop ? ' pop' : ''}" style="left:${x}px;top:${y}px;transform:translateY(calc(-100% - 12px))"><div class="frost"><div class="inner">
-      ${se.imgs ? `<div class="ph" style="background:${photoBg(se)}">${se.g}${se.imgs > 1 ? `<span class="cnt"><span class="ms">photo_library</span>${se.imgs}</span>` : ''}</div>` : ''}
-      <div class="bd"><div class="hd"><span class="g">${se.g}</span><span class="tt">${esc(displayTitle(se))}</span><button data-act="desel" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
-      <div class="pl">📍 ${esc(se.place)}</div>${se.body ? `<div class="bo">${esc(se.body)}</div>` : ''}</div></div></div></div>`;
+      ${se.imgs ? `<div class="ph" style="background:${photoBg(se)}">${se.imgs > 1 ? `<span class="cnt"><span class="ms">photo_library</span>${se.imgs}</span>` : ''}</div>` : ''}
+      <div class="bd"><div class="hd"><span class="tt">${esc(displayTitle(se))}</span><button data-act="desel" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
+      <div class="pl"><span class="ms">place</span>${esc(se.place)}</div>${se.body ? `<div class="bo">${esc(se.body)}</div>` : ''}</div></div></div></div>`;
   }
   marks.innerHTML = h;
   h = '';
@@ -512,7 +535,8 @@ function panelHtml(bandHeight) {
   }
   return `<section id="panel" class="card-float" style="top:${P.margin}px;right:${P.margin}px;bottom:${P.margin + bandHeight + P.gap}px;width:${P.panelWidth}px">
     <div class="ph-head"><div class="tx"><div class="ph-title">${esc(TRIP.title)}</div>
-      <div class="ph-sub">${esc(S('panelDates', { start: fmtDot(TRIP.start), end: fmtDot(TRIP.end), n }))}</div></div>
+      <div class="ph-sub">${esc(S('panelDates', { start: fmtDot(TRIP.start), end: fmtDot(TRIP.end), n }))}</div>
+      ${TRIP.companions.length ? `<div class="ph-sub ph-with"><span class="ms">group</span>${esc(S('companions', { names: TRIP.companions.join('、') }))}</div>` : ''}</div>
       <button class="ibtn" data-act="closeTrip" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
     <div class="hair"></div><div id="plist">${list}</div></section>`;
 }
@@ -520,9 +544,8 @@ function cardHtml(e) {
   let imgs = '';
   if (e.imgs) {
     const hh = e.imgs === 1 ? P.cardImgH : P.cardMultiImgH;
-    imgs = `<div class="imgs">${Array.from({ length: Math.min(e.imgs, 4) }, (_, i) => `<div class="ph" style="height:${hh}px;background:${photoBg(e, i)}">${e.g}</div>`).join('')}</div>`;
+    imgs = `<div class="imgs">${Array.from({ length: Math.min(e.imgs, 4) }, (_, i) => `<div class="ph" style="height:${hh}px;background:${photoBg(e, i)}"></div>`).join('')}</div>`;
   }
-  const ts = e.ts, when = `${fmtDot(ts)} ${pad(ts.getHours())}:${pad(ts.getMinutes())}`;
   const del = armed === e.id
     ? `<button class="confirm" data-act="confirmDel" data-id="${e.id}">${esc(S('confirmDelete'))}</button>`
     : `<button class="ibtn" data-act="arm" data-id="${e.id}" title="删除"><span class="ms">delete</span></button>`;
@@ -530,46 +553,48 @@ function cardHtml(e) {
     <div class="rw"><div class="col">
       ${e.title ? `<div class="ti">${esc(e.title)}</div>` : ''}
       ${e.body ? `<div class="bo">${esc(e.body)}</div>` : ''}
-      ${!e.title && !e.body ? `<div class="ti">${TYPES[e.type][0]}</div>` : ''}
-      <div class="meta"><div class="l1"><span class="ms">${TYPES[e.type][1]}</span>${TYPES[e.type][0]}<span style="width:4px"></span><span class="ms">place</span><span class="pn">${esc(e.place)}</span></div>
-        <div class="sm">${when} · ${esc(TRIP.title)}</div>
-        <div class="sm">${esc(S('companions', { names: TRIP.companions.join('、') }))}</div></div>
+      ${!e.title && !e.body ? `<div class="ti">记录</div>` : ''}
+      <div class="meta"><div class="l1"><span class="ms">place</span><span class="pn">${esc(e.place)}</span></div></div>
     </div>
     <button class="ibtn" data-act="toast" data-msg="编辑会在卡片内展开记录表单（本原型不包含）" title="编辑"><span class="ms">edit</span></button>${del}</div></article>`;
 }
 function bandHtml(bandHeight, lastDay) {
   const acc = rgb(tripColor());
-  // A true time axis: every trip day is one 24h span of equal width, the day's
-  // pill sits on its midnight, and each record's dot sits at its clock time.
+  // A true time axis: every trip day is one 24h span of equal width, a light
+  // grey arc spans each day from 0h to 24h with the day number at its centre,
+  // and each record's dot sits at its clock time.
   const PAD = 44, dayLen = 24 * P.pxPerHour;
   const totalDays = dayIndex(TRIP.end);
   const X = (d, h = 0) => PAD + (d - 1) * dayLen + h * P.pxPerHour;
-  const RAIL_Y = 26; // centre line of the rail within the track
+  const RAIL_Y = 26 + P.axisDrop; // centre line of the rail within the track
   let html = '';
-  // Rail: one segment per day, in that day's route colour.
+  const tick = (x, major) => `<i class="tick${major ? ' major' : ''}" style="left:${x}px;top:${RAIL_Y - (major ? 3.5 : 2)}px"></i>`;
+  const arcBottom = RAIL_Y + P.arcDepth;
+  let arcs = '';
   for (let d = 1; d <= totalDays; d++) {
-    const c = dayColor(Math.min(d, lastDay), lastDay);
-    html += `<i class="seg" style="left:${X(d)}px;width:${dayLen}px;top:${RAIL_Y}px;background:${rgb(c, P.railAlpha)}"></i>`;
-    if (P.t_hourTicks) for (const h of [6, 12, 18]) {
-      html += `<i class="tick" style="left:${X(d, h)}px;top:${RAIL_Y - 3}px;background:${rgb(c, Math.min(1, P.railAlpha + .2))}"></i><span class="tickl" style="left:${X(d, h)}px">${h}</span>`;
+    html += `<i class="rseg" style="left:${X(d)}px;width:${dayLen}px;top:${RAIL_Y}px"></i>`;
+    // One tick per hour; midnight and 6/12/18 are longer, and only 6/12/18 carry a number.
+    for (let h = 0; h < 24; h++) {
+      const major = h % 6 === 0;
+      html += tick(X(d, h), major);
+      if (major && h && P.t_hourTicks) html += `<span class="tickl" style="left:${X(d, h)}px;top:${RAIL_Y - 22}px">${h}</span>`;
     }
+    // The day's arc: from this midnight to the next, dipping below the rail.
+    const x0 = X(d), x1 = X(d + 1), xm = (x0 + x1) / 2;
+    arcs += `<path d="M${x0} ${RAIL_Y} Q${xm} ${RAIL_Y + 2 * P.arcDepth} ${x1} ${RAIL_Y}"/>`;
+    html += `<span class="dayl" style="left:${xm}px;top:${arcBottom}px">${esc(S('dayArc', { n: d }))}</span>`;
   }
-  // Items along the axis (midnight pills and record dots), used to keep each
-  // label from running into its neighbours.
+  html += tick(X(totalDays + 1), true);
+  html = `<svg class="arcs" width="${X(totalDays + 1) + PAD}" height="${arcBottom + 4}" aria-hidden="true">${arcs}</svg>` + html;
   const items = [];
-  for (let d = 1; d <= totalDays; d++) items.push({ x: X(d), day: d });
   const sorted = [...entries].sort((a, b) => a.ts - b.ts);
   for (const e of sorted) items.push({ x: X(dayIndex(e.ts), e.ts.getHours() + e.ts.getMinutes() / 60), e });
   items.sort((a, b) => a.x - b.x);
   for (const it of items) {
-    if (it.day) {
-      const d = it.day, c = dayColor(Math.min(d, lastDay), lastDay);
-      const f = new Date(TRIP.start.getFullYear(), TRIP.start.getMonth(), TRIP.start.getDate() + d - 1);
-      html += `<div class="tday" style="left:${it.x}px"><div class="dotrow"><span class="pill" style="background:${rgb(blend(c, .16))};border:1px solid ${rgb(blend(c, .55))};color:${rgb(readable(Math.min(d, lastDay), lastDay))}">${esc(S('dayPill', dv(d, f)))}</span></div><div class="dd">${esc(S('dayDate', dv(d, f)))}</div></div>`;
-    } else {
+    if (!it.day) {
       const e = it.e, d = dayIndex(e.ts), c = dayColor(d, lastDay);
       const s = e.id === sel, dd = s ? P.dotSelD : P.dotD;
-      html += `<div class="tnode ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="left:${it.x - P.dotHit / 2}px;width:${P.dotHit}px">
+      html += `<div class="tnode ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="left:${it.x - P.dotHit / 2}px;top:${RAIL_Y - 18}px;width:${P.dotHit}px">
         <div class="dotrow"><span class="hit"><span class="dot" style="width:${dd}px;height:${dd}px;background:${rgb(c)};border:${s ? 1.5 : 1}px solid var(--surface);${s ? `box-shadow:0 0 0 1px ${rgb(c)}, 0 0 5px 1px ${rgb(c, .45)};` : ''}"></span></span></div></div>`;
     }
   }
@@ -577,9 +602,8 @@ function bandHtml(bandHeight, lastDay) {
   return `<section id="band" class="card-float" style="left:${P.margin}px;right:${P.margin}px;bottom:${P.margin}px;height:${bandHeight}px">
     <div class="bh">${P.t_bandShowTitle ? `<span class="ms ic" style="color:${acc}">timeline</span><span class="ti">${esc(S('bandTitle', { trip: TRIP.title }))}</span>
       <span class="n">${esc(S('bandCount', { n: entries.length }))}</span>` : ''}<span class="sp"></span>
-      <button class="ibtn cmp" data-act="toggleBand" title="${esc(expanded ? S('collapse') : S('expand'))}"><span class="ms">${expanded ? 'keyboard_arrow_down' : 'keyboard_arrow_up'}</span></button>
       <button class="ibtn cmp" data-act="closeTrip" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
-    ${expanded ? `<div class="hair"></div>${entries.length ? `<div id="brow">${cells}</div>` : `<div class="empty">${esc(S('bandEmpty'))}</div>`}` : ''}</section>`;
+    ${expanded ? `${entries.length ? `<div id="brow">${cells}</div>` : `<div class="empty">${esc(S('bandEmpty'))}</div>`}` : ''}</section>`;
 }
 
 /* ======================= interactions ======================= */
@@ -605,7 +629,9 @@ function centerPanel(id) {
 function select(id, source) {
   sel = id; render();
   if (!id) return;
-  if (source === 'node' && P.t_hoverLink) { centerMap(id); centerPanel(id); }
+  // A timeline dot (behind the hover-link toggle) or a map dot centres the record
+  // on the map and scrolls the records panel to its card.
+  if ((source === 'node' && P.t_hoverLink) || source === 'map') { centerMap(id); centerPanel(id); }
   const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
   if (P.t_bandFollow) {
     const n = document.querySelector(`[data-node="${id}"]`), row = $('#brow');
@@ -614,6 +640,18 @@ function select(id, source) {
   if (P.t_panelFollow && source !== 'card') {
     document.querySelector(`[data-card="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: smooth });
   }
+}
+// Closing a trip: the records panel and the timeline shrink towards their
+// anchored corners and fade out, then the trip actually closes.
+let closing = false;
+function closeTrip() {
+  if (closing) return;
+  const els = [$('#panel'), $('#band')].filter(Boolean);
+  if (!els.length) { tripOpen = false; render(); return; }
+  closing = true;
+  hideTip();
+  els.forEach(el => el.classList.add('closing'));
+  setTimeout(() => { closing = false; tripOpen = false; sel = null; render(); }, P.closeMs);
 }
 function toast(msg) {
   document.querySelector('.toast')?.remove();
@@ -654,7 +692,7 @@ app.addEventListener('click', ev => {
     ev.stopPropagation();
     const act = a.dataset.act;
     if (act === 'desel') select(null);
-    else if (act === 'closeTrip') { tripOpen = false; render(); }
+    else if (act === 'closeTrip') closeTrip();
     else if (act === 'trips') { if (!tripOpen) { tripOpen = true; render(); } else toast('在真实应用里，这里打开「旅途」列表面板'); }
     else if (act === 'toggleBand') { expanded = !expanded; render(); }
     else if (act === 'toast') toast(a.dataset.msg);
