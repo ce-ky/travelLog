@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show ValueListenable, kDebugMode;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -319,6 +319,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     _moveController?.dispose();
     _hover.dispose();
     _selectedN.dispose();
+    _timelineHoverN.dispose();
+    _revealN.dispose();
+    _hoverPanTimer?.cancel();
     super.dispose();
   }
 
@@ -404,6 +407,19 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// every marker), which is what made the first record tap stutter.
   final ValueNotifier<Entry?> _selectedN = ValueNotifier(null);
 
+  /// The record whose dot is under the pointer in the bottom timeline, if any.
+  /// Its map dot takes the same hover state as if the map dot itself were
+  /// hovered, so the two can be matched up at a glance.
+  final ValueNotifier<String?> _timelineHoverN = ValueNotifier(null);
+
+  /// Asks the records panel to scroll a record's card into the middle of the
+  /// list (driven by hovering or tapping a timeline dot).
+  final ValueNotifier<String?> _revealN = ValueNotifier(null);
+
+  /// Delays the hover-driven pan a touch, so sweeping the pointer across the
+  /// timeline doesn't yank the map and panel back and forth.
+  Timer? _hoverPanTimer;
+
   /// Record ids whose bubble text has already been warmed into the glyph atlas
   /// (see [_scheduleEntryTextWarmup]), so each record is warmed only once.
   final Set<String> _warmedTextIds = {};
@@ -428,19 +444,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   static const double _panelBreakpoint = 720;
 
   /// Current map zoom, tracked so markers can collapse into per-trip clusters
-  /// when zoomed out. There are three bands, from zoomed-out to zoomed-in:
-  ///   • below [_recordZoom]            → per-trip cluster bubbles
-  ///   • [_recordZoom, _pinZoom)        → small route-coloured dots for every
-  ///                                       record (records may still overlap
-  ///                                       at this scale, so a full marker
-  ///                                       each would collide — a tidy dot
-  ///                                       reads cleaner)
-  ///   • at/above [_pinZoom]            → each record's own marker: a photo +
-  ///                                       title thumbnail if it has an image,
-  ///                                       otherwise the same route-coloured dot
+  /// when zoomed out: below [_recordZoom] each trip is one cluster bubble; at
+  /// or above it every record is a small route-coloured dot — the same dot
+  /// whether or not the record carries an image.
   double _zoom = 5;
   static const double _recordZoom = 9;
-  static const double _pinZoom = 13;
 
   /// Street-level zoom. Below this, a map tap zooms in rather than placing a
   /// record — so records are only added when the location is precise.
@@ -448,10 +456,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   /// Zoomed out far enough to show per-trip cluster bubbles instead of records.
   bool get _collapsed => _zoom < _recordZoom;
-
-  /// The middle band: every record is shown as a small dot rather than its
-  /// full marker, because at this scale full markers would overlap one another.
-  bool get _dots => !_collapsed && _zoom < _pinZoom;
 
   /// The zoom the route line's width was last computed at, so a smooth zoom only
   /// rebuilds the map in small steps (not every frame) as the line thickens.
@@ -493,8 +497,69 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     final loc = entry.location;
     if (loc != null) {
       _wheelTargetZoom = null;
-      _animatedMove(loc.latLng, math.max(_zoom, _recordZoom + 4).toDouble());
+      final zoom = math.max(_zoom, _recordZoom + 4).toDouble();
+      _animatedMove(_centerShowing(loc.latLng, zoom), zoom);
     }
+  }
+
+  /// Width of the floating records panel, and the margin/gap around the
+  /// floating panels — shared by the layout and [_centerShowing].
+  static const double _panelWidth = 360;
+  static const double _panelMargin = 20;
+  static const double _panelGap = 12;
+
+  /// The camera centre that puts [point] in the middle of the part of the map
+  /// the floating records panel and timeline leave uncovered (or plain
+  /// [point] when neither is open), at [zoom].
+  LatLng _centerShowing(LatLng point, double zoom) {
+    final wide = MediaQuery.sizeOf(context).width >= _panelBreakpoint;
+    if (!wide || _panelTripId == null) return point;
+    final band = _timelineExpanded
+        ? TripTimelineBar.expandedHeight
+        : TripTimelineBar.collapsedHeight;
+    final cam = _map.camera.withPosition(center: point, zoom: zoom);
+    final size = cam.nonRotatedSize;
+    final visible = math.Point<double>(
+      (size.x - (_panelWidth + _panelMargin * 2)) / 2,
+      (size.y - (band + _panelMargin + _panelGap)) / 2,
+    );
+    // With [point] at the screen centre, move the camera centre the other way
+    // by the gap between the screen centre and the visible area's centre:
+    // centre + (centre - visible) = size - visible.
+    return cam.pointToLatLng(math.Point(size.x - visible.x, size.y - visible.y));
+  }
+
+  /// A timeline dot gained or lost the pointer: mark the matching map dot, and
+  /// (after a beat) pan the map and scroll the records panel to that record.
+  void _onTimelineHover(Entry? entry) {
+    _timelineHoverN.value = entry?.id;
+    _hoverPanTimer?.cancel();
+    if (entry == null) return;
+    _hoverPanTimer = Timer(const Duration(milliseconds: 90), () {
+      if (!mounted) return;
+      _revealInPanel(entry);
+      final loc = entry.location;
+      if (loc == null) return;
+      _wheelTargetZoom = null;
+      _animatedMove(
+        _centerShowing(loc.latLng, _map.camera.zoom),
+        _map.camera.zoom,
+        duration: const Duration(milliseconds: 600),
+      );
+    });
+  }
+
+  /// Tapping a timeline dot selects the record on the map and in the panel.
+  void _onTimelineTap(Entry entry) {
+    _hoverPanTimer?.cancel();
+    _selectEntry(entry);
+    _revealInPanel(entry);
+  }
+
+  void _revealInPanel(Entry entry) {
+    // Re-announce even the same id, so returning to a record scrolls again.
+    _revealN.value = null;
+    _revealN.value = entry.id;
   }
 
   void _onSaved(Entry entry) {
@@ -754,12 +819,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 // Track zoom (to collapse/expand markers) and keep any open
                 // popup pinned to its point while the map moves.
                 onPositionChanged: (camera, __) {
-                  // Rebuild when the zoom crosses either band boundary — the
-                  // cluster↔record line ([_recordZoom]) or the dot↔pin line
-                  // ([_pinZoom]) — since each changes what the markers render as.
+                  // Rebuild when the zoom crosses the cluster↔record line
+                  // ([_recordZoom]), since that changes what the markers are.
                   final crossed =
-                      (camera.zoom < _recordZoom) != (_zoom < _recordZoom) ||
-                          (camera.zoom < _pinZoom) != (_zoom < _pinZoom);
+                      (camera.zoom < _recordZoom) != (_zoom < _recordZoom);
                   // Grow the route line smoothly with zoom: rebuild once the zoom
                   // has moved a small step since the width was last computed, but
                   // only while the line is on screen and still within the band it
@@ -837,60 +900,28 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             ),
                           ),
                         )
-                    else if (_dots)
-                      // Middle band: individual records, but as small dots so
-                      // near-neighbours don't collide the way the full markers
-                      // below would at this scale. Tapping one zooms in (via
-                      // [_selectEntry]) to its full marker and expanded bubble.
+                    else
+                      // Zoomed in: every record is the same small dot in its
+                      // route leg's colour, image or not. Hovering it — or its
+                      // twin in the bottom timeline — springs it up in size;
+                      // tapping it zooms in and expands its bubble (a separate
+                      // layer below, so this list never rebuilds on selection).
                       for (final e in entries)
                         Marker(
                           point: e.location!.latLng,
-                          width: 18,
-                          height: 18,
+                          width: 24,
+                          height: 24,
                           // The dot sits centred right on the point.
                           child: _HoverScale(
+                            scale: 1.8,
+                            linked: _timelineHoverN,
+                            linkedId: e.id,
                             child: _EntryDot(
                               color: entryColor[e.id] ?? _recordFill,
                               onTap: () => _selectEntry(e),
                             ),
                           ),
-                        )
-                    else
-                      // Zoomed in: individual records, shown as a photo +
-                      // title thumbnail when the record carries an image, or
-                      // as a plain dot (matching its route leg's colour) when
-                      // it doesn't — no more one-size-fits-all pin bubble. The
-                      // selected one keeps its marker (the expanded bubble, a
-                      // separate layer below, sits on top of it) so this list
-                      // never rebuilds on selection.
-                      for (final e in entries)
-                        if (e.hasImage)
-                          Marker(
-                            point: e.location!.latLng,
-                            width: 72,
-                            height: 84,
-                            // Bottom-centre (the tail tip) sits on the point.
-                            alignment: Alignment.topCenter,
-                            child: _HoverScale(
-                              alignment: Alignment.bottomCenter,
-                              child: _EntryThumbnailMarker(
-                                entry: e,
-                                onTap: () => _selectEntry(e),
-                              ),
-                            ),
-                          )
-                        else
-                          Marker(
-                            point: e.location!.latLng,
-                            width: 18,
-                            height: 18,
-                            child: _HoverScale(
-                              child: _EntryDot(
-                                color: entryColor[e.id] ?? _recordFill,
-                                onTap: () => _selectEntry(e),
-                              ),
-                            ),
-                          ),
+                        ),
                     // A pulsing pin marks exactly where the tap landed while the
                     // add-record popup is open.
                     if (_addingPoint != null)
@@ -920,9 +951,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           width: 250,
                           height: 280,
                           alignment: Alignment.topCenter,
-                          child: _ExpandedBubble(
-                            entry: selected,
-                            onClose: () => _selectedN.value = null,
+                          // Keyed by record, so each newly selected record's
+                          // bubble plays its pop-in once.
+                          child: _BubblePop(
+                            key: ValueKey(selected.id),
+                            child: _ExpandedBubble(
+                              entry: selected,
+                              onClose: () => _selectedN.value = null,
+                            ),
                           ),
                         ),
                       ],
@@ -1012,10 +1048,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       children: [
         Positioned.fill(child: map),
         Positioned(
-          top: 20,
-          right: 20,
-          bottom: 20 + bandHeight + 12,
-          width: 360,
+          top: _panelMargin,
+          right: _panelMargin,
+          bottom: _panelMargin + bandHeight + _panelGap,
+          width: _panelWidth,
           child: Material(
             elevation: 6,
             color: Theme.of(context).colorScheme.surface,
@@ -1030,6 +1066,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 onClose: () => setState(() => _panelTripId = null),
                 onRecordTap: _selectEntry,
                 selectedEntryId: selected?.id,
+                reveal: _revealN,
               ),
             ),
           ),
@@ -1046,10 +1083,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             valueListenable: _selectedN,
             builder: (context, selected, _) => TripTimelineBar(
               tripId: _panelTripId!,
-              accent: _tripColor(_panelTripId!),
               dayColor: (day, lastDay) =>
                   _tripDayColor(_panelTripId!, day, lastDay),
-              onNodeTap: _selectEntry,
+              onNodeTap: _onTimelineTap,
+              onNodeHover: _onTimelineHover,
               selectedEntryId: selected?.id,
               expanded: _timelineExpanded,
               onToggleExpanded: () =>
@@ -1147,9 +1184,20 @@ class _HoverScale extends StatefulWidget {
   final Widget child;
   final Alignment alignment;
 
+  /// How far the child grows while hovered.
+  final double scale;
+
+  /// Optional outside hover: while [linked] holds [linkedId] the child is shown
+  /// hovered too (a record dot, when its twin in the timeline is hovered).
+  final ValueListenable<String?>? linked;
+  final String? linkedId;
+
   const _HoverScale({
     required this.child,
     this.alignment = Alignment.center,
+    this.scale = 1.18,
+    this.linked,
+    this.linkedId,
   });
 
   @override
@@ -1166,7 +1214,8 @@ class _HoverScaleState extends State<_HoverScale>
   // Grow with a slight overshoot on the way up (the little pop), then settle at
   // the enlarged size and stay there. Reversing (on mouse exit) eases straight
   // back down without the overshoot.
-  late final Animation<double> _scale = Tween(begin: 1.0, end: 1.18).animate(
+  late final Animation<double> _scale =
+      Tween(begin: 1.0, end: widget.scale).animate(
     CurvedAnimation(
       parent: _c,
       curve: Curves.easeOutBack,
@@ -1174,8 +1223,32 @@ class _HoverScaleState extends State<_HoverScale>
     ),
   );
 
+  bool _mouseIn = false;
+
+  bool get _linkedOn =>
+      widget.linked != null && widget.linked!.value == widget.linkedId;
+
+  void _sync() => (_mouseIn || _linkedOn) ? _c.forward() : _c.reverse();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.linked?.addListener(_sync);
+    if (_linkedOn) _c.value = 1;
+  }
+
+  @override
+  void didUpdateWidget(_HoverScale old) {
+    super.didUpdateWidget(old);
+    if (old.linked != widget.linked) {
+      old.linked?.removeListener(_sync);
+      widget.linked?.addListener(_sync);
+    }
+  }
+
   @override
   void dispose() {
+    widget.linked?.removeListener(_sync);
     _c.dispose();
     super.dispose();
   }
@@ -1183,9 +1256,16 @@ class _HoverScaleState extends State<_HoverScale>
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      // Enter: grow and hold enlarged. Exit: reverse back to the resting size.
-      onEnter: (_) => _c.forward(),
-      onExit: (_) => _c.reverse(),
+      // Enter: grow and hold enlarged. Exit: reverse back to the resting size
+      // (unless the linked hover still holds it up).
+      onEnter: (_) {
+        _mouseIn = true;
+        _sync();
+      },
+      onExit: (_) {
+        _mouseIn = false;
+        _sync();
+      },
       child: ScaleTransition(
         scale: _scale,
         alignment: widget.alignment,
@@ -1493,76 +1573,9 @@ class _TripCluster extends StatelessWidget {
   }
 }
 
-/// The at-a-glance marker for a record that carries at least one image: its
-/// first photo plus a one-line title, in the same frosted tailed-bubble shape
-/// the trip cluster label uses — so the map itself previews *which* record is
-/// which without needing a tap. Records without an image fall back to the
-/// plain [_EntryDot] instead (see the call site in [_MapScreenState.build]).
-class _EntryThumbnailMarker extends StatelessWidget {
-  final Entry entry;
-  final VoidCallback onTap;
-
-  const _EntryThumbnailMarker({required this.entry, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: _FrostedBubble(
-        tailHeight: 10,
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Padding(
-            padding: const EdgeInsets.all(5),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: EntryImage(
-                    imagePath: entry.imagePath,
-                    width: 60,
-                    height: 44,
-                    fit: BoxFit.cover,
-                    fallback: SizedBox(
-                      width: 60,
-                      height: 44,
-                      child: Center(
-                        child: Text(entry.markerGlyph,
-                            style: const TextStyle(fontSize: 18)),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                SizedBox(
-                  width: 60,
-                  child: Text(
-                    entry.displayTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The simplest possible marker for a record with no image to show: a small
-/// dot in [color] (the colour of the route leg it sits on), with a darker rim
-/// of the same hue. Used both for image-less records at full zoom and for
-/// every record in the middle zoom band, where full markers would overlap.
-/// Tapping it selects the record (which zooms in to its full marker).
+/// A record on the map: a small dot in [color] (the colour of the route leg it
+/// sits on), with a darker rim of the same hue. Every record uses it, image or
+/// not. Tapping it selects the record (zooming in and expanding its bubble).
 class _EntryDot extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
@@ -1584,6 +1597,34 @@ class _EntryDot extends StatelessWidget {
             shape: BoxShape.circle,
             border: Border.all(color: _darken(color), width: 1.4),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Plays a record bubble's entrance: after a short beat (so the map is already
+/// gliding to the record), it grows out of its tail tip — the map point — with
+/// a slight overshoot, fading in as it goes.
+class _BubblePop extends StatelessWidget {
+  final Widget child;
+
+  const _BubblePop({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      // 180ms of waiting, then a 320ms pop.
+      duration: const Duration(milliseconds: 500),
+      curve: const Interval(0.36, 1, curve: Curves.easeOutBack),
+      child: child,
+      builder: (context, t, child) => Opacity(
+        opacity: t.clamp(0.0, 1.0),
+        child: Transform.scale(
+          scale: 0.4 + 0.6 * t,
+          alignment: Alignment.bottomCenter,
+          child: child,
         ),
       ),
     );

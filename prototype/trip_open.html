@@ -1,0 +1,745 @@
+<title>TravelLog 旅途原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0,0&display=block">
+<style>
+/* Layout: a fixed-size "app window" (the Flutter wide layout, scaled to fit) beside a
+   docked tuning drawer. The app deliberately mirrors the app's single light M3 theme
+   (seed 0xFF3D8D7A), so this page commits to light only. */
+:root {
+  color-scheme: light;
+  /* M3 tones derived from seed 0xFF3D8D7A */
+  --primary: #2b6a5b;
+  --on-primary: #ffffff;
+  --secondary-container: #cde8df;
+  --surface: #f5fbf7;
+  --surface-low: #eff5f1;
+  --surface-highest: #dde4e0;
+  --on-surface: #171d1b;
+  --on-surface-variant: #3f4945;
+  --outline-variant: #bfc9c4;
+  --hint: rgba(0,0,0,.6);
+  --grey: #9e9e9e;
+  --error: #ba1a1a;
+  --land: #f2efe9;
+  --water: #aad3df;
+  --park: #cdebb0;
+  --road: #ffffff;
+  --road-edge: #e0dcd4;
+  /* tuning drawer (outside the app) */
+  --dock-bg: #1e2422;
+  --dock-fg: #e3e9e6;
+  --dock-dim: #9aa8a2;
+  --dock-line: #36403c;
+  --dock-accent: #8fd6c1;
+  --font: "Roboto", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+html, body { height: 100%; }
+body { background: var(--dock-bg); color: var(--on-surface); font-family: var(--font); overflow: hidden; }
+.ms { font-family: "Material Symbols Outlined"; font-weight: normal; font-style: normal; font-size: 24px; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; width: 1em; overflow: hidden; white-space: nowrap; direction: ltr; -webkit-font-smoothing: antialiased; user-select: none; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--dock-accent); outline-offset: 2px; }
+
+#shell { display: flex; height: 100%; }
+
+/* ---------------- tuning drawer ---------------- */
+#dock { width: 320px; flex: none; background: var(--dock-bg); color: var(--dock-fg); display: flex; flex-direction: column; border-right: 1px solid var(--dock-line); font-size: 13px; }
+#dock[hidden] { display: none !important; }
+.dock-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--dock-line); display: flex; align-items: center; gap: 8px; }
+.dock-head h1 { font-size: 15px; font-weight: 700; margin: 0; flex: 1; }
+.dock-head small { color: var(--dock-dim); font-size: 11px; display: block; font-weight: 400; margin-top: 2px; }
+.dock-body { flex: 1; overflow-y: auto; padding: 4px 16px 16px; }
+.dock-body details { border-bottom: 1px solid var(--dock-line); }
+.dock-body summary { cursor: pointer; padding: 12px 0 10px; font-weight: 700; font-size: 12px; letter-spacing: .06em; color: var(--dock-dim); list-style: none; display: flex; justify-content: space-between; }
+.dock-body summary::after { content: "+"; }
+.dock-body details[open] summary::after { content: "–"; }
+.row { display: grid; grid-template-columns: 1fr 64px; gap: 2px 8px; align-items: center; margin-bottom: 10px; }
+.row label { font-size: 12.5px; }
+.row .dart { grid-column: 1 / -1; font-family: var(--mono); font-size: 10px; color: var(--dock-dim); }
+.row input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--dock-accent); }
+.row input[type=number] { width: 64px; background: #2a322f; color: var(--dock-fg); border: 1px solid var(--dock-line); border-radius: 4px; padding: 2px 4px; font-family: var(--mono); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.row.changed label { color: var(--dock-accent); }
+.row.changed label::after { content: " ●"; font-size: 9px; }
+.srow { margin-bottom: 10px; }
+.srow label { display: block; font-size: 12px; margin-bottom: 3px; }
+.srow label span { color: var(--dock-dim); font-family: var(--mono); font-size: 10px; }
+.srow input { width: 100%; background: #2a322f; color: var(--dock-fg); border: 1px solid var(--dock-line); border-radius: 4px; padding: 5px 6px; font-family: var(--font); font-size: 13px; }
+.srow.changed input { border-color: var(--dock-accent); }
+.check { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; font-size: 12.5px; cursor: pointer; }
+.check input { accent-color: var(--dock-accent); margin-top: 2px; }
+.check small { display: block; color: var(--dock-dim); font-size: 11px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.seg button { border: 1px solid var(--dock-line); border-radius: 14px; padding: 3px 10px; font-size: 12px; }
+.seg button[aria-pressed=true] { background: var(--dock-accent); color: #0f2a22; border-color: var(--dock-accent); }
+.dock-foot { border-top: 1px solid var(--dock-line); padding: 12px 16px 14px; display: grid; gap: 8px; }
+.dock-foot textarea { width: 100%; height: 110px; resize: vertical; background: #141a18; color: var(--dock-fg); border: 1px solid var(--dock-line); border-radius: 6px; font-family: var(--mono); font-size: 11px; padding: 8px; }
+.dock-foot .btns { display: flex; gap: 8px; }
+.dock-foot .btns button { flex: 1; border-radius: 6px; padding: 7px 0; font-weight: 500; font-size: 12.5px; }
+.btn-main { background: var(--dock-accent); color: #0f2a22; }
+.btn-ghost { border: 1px solid var(--dock-line) !important; }
+.foot-note { color: var(--dock-dim); font-size: 11px; line-height: 1.5; }
+
+/* ---------------- stage + scaled app window ---------------- */
+#stage { flex: 1; min-width: 0; position: relative; overflow: hidden; background: #2a312e; }
+#dockToggle { position: absolute; left: 10px; top: 10px; z-index: 50; background: var(--dock-bg); color: var(--dock-fg); border: 1px solid var(--dock-line); border-radius: 16px; padding: 5px 12px 5px 8px; font-size: 12px; display: flex; gap: 4px; align-items: center; }
+#dockToggle .ms { font-size: 18px; }
+#app { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; background: var(--land); font-size: 14px; box-shadow: 0 0 0 1px rgba(0,0,0,.3); }
+
+/* map */
+/* The map "camera": panning = translating the whole world layer, eased. */
+#world { position: absolute; inset: 0; transition: transform .6s cubic-bezier(.25,.8,.25,1); will-change: transform; }
+#mapSvg, #marks { position: absolute; inset: 0; overflow: visible; }
+/* The chrome layer spans the window but only its own widgets take the pointer,
+   so the map underneath stays hoverable and clickable. */
+#overlay { position: absolute; inset: 0; pointer-events: none; }
+#overlay > * { pointer-events: auto; }
+.frost { background: rgba(255,255,255,.86); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border: 1px solid rgba(0,0,0,.08); border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,.18); position: relative; }
+.frost::after { content: ""; position: absolute; left: 50%; bottom: -9px; width: 12px; height: 10px; margin-left: -6px; background: inherit; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.mk { position: absolute; }
+.mk-dot { width: 12px; height: 12px; border-radius: 50%; margin: -6px 0 0 -6px; cursor: pointer; transition: transform .18s cubic-bezier(.2,.9,.3,1.4), box-shadow .18s; }
+/* Same hover language as the timeline dots: the dot springs up in size. It
+   fires on the map dot itself, or on its twin in the bottom timeline. */
+.mk-dot:hover, .mk-dot.hov { transform: scale(var(--mapDotHoverScale)); box-shadow: 0 1px 4px rgba(0,0,0,.25); z-index: 3; }
+.bubble { position: absolute; width: 250px; margin-left: -125px; z-index: 5; }
+.bubble .frost { overflow: visible; transform-origin: 50% calc(100% + 10px); }
+/* Pop-in when a record becomes selected: grows out of its map point (the tail tip). */
+.bubble.pop .frost { animation: bubblePop var(--bubbleDur) cubic-bezier(.2,.9,.3,1.25) var(--bubbleDelay) both; }
+@keyframes bubblePop { from { opacity: 0; transform: translateY(8px) scale(.4); } to { opacity: 1; transform: none; } }
+.bubble .inner { border-radius: 8px; overflow: hidden; }
+.bubble .ph { height: 120px; display: grid; place-items: center; font-size: 34px; position: relative; }
+.bubble .cnt { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.54); color: #fff; border-radius: 10px; padding: 2px 6px; font-size: 11px; display: flex; align-items: center; gap: 3px; }
+.bubble .cnt .ms { font-size: 12px; }
+.bubble .bd { padding: 8px 4px 12px 12px; }
+.bubble .hd { display: flex; gap: 8px; align-items: flex-start; }
+.bubble .hd .g { font-size: 20px; }
+.bubble .hd .tt { flex: 1; font-size: 14px; font-weight: 500; padding-top: 2px; }
+.bubble .hd button { padding: 4px; border-radius: 50%; }
+.bubble .hd button .ms { font-size: 18px; }
+.bubble .pl { font-size: 12px; color: var(--hint); margin-top: 4px; }
+.bubble .bo { margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.45; }
+.cluster { position: absolute; transform: translate(-50%, -100%); margin-top: -10px; cursor: pointer; }
+.cluster .frost { display: flex; align-items: center; gap: 6px; padding: 8px 10px; white-space: nowrap; font-size: 13px; font-weight: 500; color: rgba(0,0,0,.87); }
+.cluster .dt { width: 10px; height: 10px; border-radius: 50%; }
+.cluster .n { border-radius: 10px; padding: 1px 6px; font-size: 11px; font-weight: 700; }
+
+/* floating chrome */
+.fab { position: absolute; border-radius: 50%; background: var(--surface); color: var(--on-surface-variant); box-shadow: 0 2px 4px rgba(0,0,0,.2), 0 3px 8px rgba(0,0,0,.12); display: grid; place-items: center; transition: bottom .2s ease; }
+.fab.sel { background: var(--primary); color: var(--on-primary); }
+.scale { position: absolute; left: 16px; font-size: 11px; color: #333; transition: bottom .2s ease; }
+.scale .bar { width: 80px; height: 6px; border: 2px solid #333; border-top: 0; margin-top: 1px; }
+.attrib { position: absolute; right: 8px; background: rgba(255,255,255,.7); border-radius: 4px; padding: 2px 6px; font-size: 9px; color: rgba(0,0,0,.54); transition: bottom .2s ease; }
+.hintchip { position: absolute; left: 50%; top: 20px; transform: translateX(-50%); background: rgba(33,33,33,.85); color: #fff; border-radius: 16px; padding: 6px 14px; font-size: 13px; }
+
+.card-float { position: absolute; background: var(--surface); border-radius: var(--radius); box-shadow: 0 3px 5px rgba(0,0,0,.2), 0 6px 10px rgba(0,0,0,.14), 0 1px 18px rgba(0,0,0,.12); overflow: hidden; display: flex; flex-direction: column; transition: bottom .2s ease, height .2s ease; }
+.hair { height: 1px; background: rgba(191,201,196,.4); flex: none; }
+.ibtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--on-surface-variant); flex: none; }
+.ibtn:hover { background: rgba(0,0,0,.06); }
+.ibtn .ms { font-size: 24px; }
+.ibtn.cmp { width: 36px; height: 36px; }
+
+/* right records panel */
+#panel .ph-head { display: flex; align-items: flex-start; padding: 14px 8px 10px 16px; }
+#panel .ph-head .tx { flex: 1; min-width: 0; }
+#panel .ph-title { font-size: var(--panelTitleFs); line-height: 1.27; }
+#panel .ph-sub { font-size: var(--panelSubFs); color: var(--hint); margin-top: 4px; }
+#plist { position: relative; flex: 1; overflow-y: auto; padding-bottom: 12px; }
+.dayh { padding: 16px 16px 4px; font-weight: 700; color: var(--grey); font-size: var(--dayHeaderFs); }
+.ecard { margin: 6px 12px; border-radius: 12px; background: var(--surface-low); box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 1px 3px rgba(0,0,0,.1); padding: 12px 4px 12px 12px; cursor: pointer; border: 1.5px solid transparent; transition: background .15s; }
+.ecard:hover { background: #e7eeea; }
+.ecard.sel { background: var(--secondary-container); border-color: var(--primary); }
+.ecard .imgs { display: flex; gap: 6px; margin: 0 8px 10px 0; }
+.ecard .imgs .ph { flex: 1; border-radius: 10px; display: grid; place-items: center; font-size: 26px; }
+.ecard .rw { display: flex; align-items: flex-start; }
+.ecard .col { flex: 1; min-width: 0; }
+.ecard .ti { font-size: var(--cardTitleFs); font-weight: 500; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 4px; }
+.ecard .bo { font-size: var(--cardBodyFs); line-height: 1.43; display: -webkit-box; -webkit-line-clamp: var(--cardBodyLines); -webkit-box-orient: vertical; overflow: hidden; }
+.ecard .meta { margin-top: 8px; font-size: 12px; }
+.ecard .meta .l1 { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.ecard .meta .ms { font-size: 14px; color: var(--grey); }
+.ecard .meta .pn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ecard .meta .sm { font-size: 11px; color: var(--grey); margin-top: 2px; }
+.ecard .confirm { color: var(--error); font-weight: 500; font-size: 14px; padding: 10px 8px; border-radius: 20px; white-space: nowrap; }
+
+/* bottom timeline band */
+#band .bh { height: var(--bandCollapsedH); display: flex; align-items: center; padding: 0 6px 0 16px; flex: none; }
+#band .bh .ic { font-size: 18px; margin-right: 8px; }
+#band .bh .ti { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#band .bh .n { font-size: 11px; color: var(--hint); margin-left: 8px; white-space: nowrap; }
+#band .bh .sp { flex: 1; }
+#brow { flex: 1; overflow-x: auto; overflow-y: hidden; display: flex; scrollbar-width: thin; }
+.track { position: relative; flex: none; height: 100%; }
+.seg { position: absolute; height: var(--railW); margin-top: calc(var(--railW) / -2); }
+.tick { position: absolute; width: 1px; height: 6px; }
+.tickl { position: absolute; top: 6px; transform: translateX(-50%); font-size: 9px; color: var(--hint); opacity: .8; font-variant-numeric: tabular-nums; }
+.tday { position: absolute; top: 8px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; z-index: 1; }
+.tnode { position: absolute; top: 8px; display: flex; flex-direction: column; align-items: center; z-index: 2; }
+.dotrow { height: 36px; display: grid; place-items: center; }
+/* Hover tooltip for a timeline dot: the record's time and title, shown only
+   while the pointer is on the dot. Lives above the band so it is never clipped. */
+#tip { position: absolute; z-index: 20; pointer-events: none; transform: translate(-50%, calc(-100% - 10px)); }
+#tip .frost { padding: 6px 10px 7px; max-width: var(--tipMaxW); animation: tipIn .14s ease-out both; }
+#tip .tm { font-size: var(--timeFs); color: var(--hint); font-variant-numeric: tabular-nums; line-height: 1.3; }
+#tip .lb { font-size: var(--nodeTitleFs); font-weight: 600; color: var(--on-surface); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@keyframes tipIn { from { opacity: 0; transform: translateY(4px) scale(.94); } to { opacity: 1; transform: none; } }
+.tday .dd { height: 16px; margin-top: 4px; line-height: 16px; font-size: 11px; color: var(--hint); white-space: nowrap; }
+.hit { display: grid; place-items: center; width: var(--dotHit); height: var(--dotHit); border-radius: 50%; cursor: pointer; }
+.dot { display: block; border-radius: 50%; box-sizing: border-box; transition: width .15s, height .15s, transform .18s cubic-bezier(.2,.9,.3,1.4); }
+.hit:hover .dot { transform: scale(var(--dotHoverScale)); }
+.pill { padding: 3px 8px; border-radius: 9px; font-weight: 700; font-size: var(--dayPillFs); white-space: nowrap; }
+.empty { flex: 1; display: grid; place-items: center; color: var(--hint); }
+
+.toast { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); background: #323232; color: #fff; padding: 10px 16px; border-radius: 4px; font-size: 14px; z-index: 30; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+@media (max-width: 700px) { #dock { position: absolute; z-index: 60; inset: 0 auto 0 0; width: min(320px, 88vw); } }
+</style>
+
+<div id="shell">
+  <aside id="dock" aria-label="原型调参">
+    <div class="dock-head">
+      <h1>原型调参<small>改完点「复制改动」，把 JSON 贴回对话</small></h1>
+      <button class="ibtn cmp" id="dockClose" title="收起调参栏" style="color:var(--dock-fg)"><span class="ms">left_panel_close</span></button>
+    </div>
+    <div class="dock-body" id="dockBody"></div>
+    <div class="dock-foot">
+      <textarea id="out" readonly aria-label="改动 JSON"></textarea>
+      <div class="btns">
+        <button class="btn-main" id="copyBtn">复制改动</button>
+        <button class="btn-ghost" id="resetBtn">全部重置</button>
+      </div>
+      <div class="foot-note">调参结果只存在你这台浏览器里。示例数据是原型专用，不是真实记录。</div>
+    </div>
+  </aside>
+  <main id="stage">
+    <button id="dockToggle" hidden><span class="ms">tune</span>原型调参</button>
+    <div id="app">
+      <div id="world"><svg id="mapSvg" aria-hidden="true"></svg><div id="marks"></div></div>
+      <div id="overlay"></div>
+      <div id="tip" hidden></div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ======================= parameters (each maps to a Dart constant) ======================= */
+const PARAMS = [
+  // [key, label, default, min, max, step, dart location, group]
+  ['panelWidth', '右侧栏宽度', 360, 280, 520, 4, 'map_screen.dart · Positioned(width: 360)', '布局'],
+  ['margin', '浮层外边距', 20, 8, 40, 1, 'map_screen.dart · top/right/bottom: 20', '布局'],
+  ['gap', '右侧栏与时间线间距', 12, 0, 32, 1, 'map_screen.dart · bandHeight + 12', '布局'],
+  ['radius', '浮层圆角', 16, 0, 28, 1, 'BorderRadius.circular(16)', '布局'],
+  ['bandH', '时间线展开高度', 112, 80, 240, 2, 'TripTimelineBar.expandedHeight', '底部时间线'],
+  ['bandCollapsedH', '时间线收起高度 / 标题栏高', 44, 36, 60, 1, 'TripTimelineBar.collapsedHeight', '底部时间线'],
+  ['pxPerHour', '每小时宽度 (px)', 36, 8, 120, 1, '新增：按 24h 等比的时间轴（每天 = 24 × 该值）', '底部时间线'],
+  ['mapDotHoverScale', '地图圆点悬浮放大倍数', 1.8, 1, 3, 0.1, '新增：地图 _EntryDot 悬浮态（含时间线联动）', '地图气泡'],
+  ['tipMaxW', '悬浮气泡最大宽度', 180, 100, 320, 4, '新增：dot 悬浮气泡（时间 + 标题）', '底部时间线'],
+  ['dotD', '节点圆点直径', 6, 3, 24, 1, '_nodeCell · d（原 26）', '底部时间线'],
+  ['dotSelD', '选中圆点直径', 9, 4, 30, 1, '_nodeCell · d selected（原 32）', '底部时间线'],
+  ['bubbleDur', '地图气泡弹出时长 (ms)', 320, 100, 800, 10, '新增：_ExpandedBubble 弹出动画', '地图气泡'],
+  ['bubbleDelay', '气泡弹出延迟 (ms)', 180, 0, 600, 10, '新增：等地图开始平移后再弹出', '地图气泡'],
+  ['dotHit', '圆点悬浮感应范围', 22, 8, 40, 1, '新增：dot 周边的 hover/点击热区', '底部时间线'],
+  ['dotHoverScale', '鼠标移入放大倍数', 1.8, 1, 3, 0.1, '新增：hover 放大动画', '底部时间线'],
+  ['nodeTitleFs', '节点标题字号', 12, 10, 16, 0.5, '_nodeCell · fontSize: 12', '底部时间线'],
+  ['timeFs', '时间字号', 11, 9, 14, 0.5, '_nodeCell · HH:mm fontSize: 11', '底部时间线'],
+  ['dayPillFs', '日期胶囊字号', 11, 9, 14, 0.5, '_dayCell · fontSize: 11', '底部时间线'],
+  ['railW', '轨道线粗细', 2, 1, 5, 0.5, '_rail · height: 2', '底部时间线'],
+  ['railAlpha', '轨道线不透明度', 0.45, 0.1, 1, 0.05, '_rail · alpha: 0.45', '底部时间线'],
+  ['panelTitleFs', '旅途标题字号', 22, 16, 28, 1, 'TripRecordsPanel · titleLarge', '右侧记录栏'],
+  ['panelSubFs', '日期行字号', 12, 10, 15, 0.5, 'TripRecordsPanel · fontSize: 12', '右侧记录栏'],
+  ['dayHeaderFs', '「第N天」分组字号', 14, 11, 18, 0.5, 'EntryGroupedList · day header', '右侧记录栏'],
+  ['cardTitleFs', '卡片标题字号', 16, 13, 20, 0.5, 'EntryCard · titleMedium', '右侧记录栏'],
+  ['cardBodyFs', '卡片正文字号', 14, 12, 17, 0.5, 'EntryCard · body', '右侧记录栏'],
+  ['cardBodyLines', '正文最多行数', 4, 1, 8, 1, 'EntryCard · maxLines: 4', '右侧记录栏'],
+  ['cardImgH', '单图高度', 168, 80, 240, 4, '_ImageStrip · height: 168', '右侧记录栏'],
+  ['cardMultiImgH', '多图高度', 92, 56, 160, 2, '_ImageStrip · height: 92', '右侧记录栏'],
+  ['tripHue', '旅途色相 (H)', 200, 0, 359, 1, '_tripColor · hue 由 trip.id 哈希决定', '颜色'],
+  ['dayLightStart', '第1天亮度 (L)', 0.70, 0.3, 0.9, 0.01, '_tripDayColor · 0.70', '颜色'],
+  ['dayLightEnd', '最后一天亮度 (L)', 0.30, 0.15, 0.7, 0.01, '_tripDayColor · 0.30', '颜色'],
+];
+const STRINGS = [
+  // [key, label, default, placeholders]
+  ['bandTitle', '时间线标题', '{trip} · 时间线', '{trip}'],
+  ['bandCount', '节点计数', '{n} 个节点', '{n}'],
+  ['tipTime', '悬浮气泡时间行', '{time}', '{time} {date}'],
+  ['bandEmpty', '时间线空状态', '这趟旅途还没有记录', ''],
+  ['collapse', '收起按钮提示', '收起时间线', ''],
+  ['expand', '展开按钮提示', '展开时间线', ''],
+  ['dayPill', '日期胶囊', '{mm}-{dd}', '{mm} {dd} {n}'],
+  ['dayDate', '胶囊下小字', '第{n}天', '{n} {m} {d} {mm} {dd}'],
+  ['panelDates', '右侧栏日期行', '{start} – {end} · {n} 条记录', '{start} {end} {n}'],
+  ['dayHeader', '分组标题', '第{n}天 · {m}月{d}日', '{n} {m} {d}'],
+  ['companions', '同行者行', '与 {names}', '{names}'],
+  ['confirmDelete', '删除二次确认', '是否确认？', ''],
+  ['close', '关闭按钮提示', '关闭', ''],
+];
+const TOGGLES = [
+  ['hoverLink', '移入圆点联动地图与右侧栏', true, '新增：移入圆点时地图平移、右侧栏滚动，使该记录居中；点击时两处同时展开选中'],
+  ['panelFollow', '右侧栏跟随选中滚动', false, '现状：只有时间线会把选中项滚到中间，右侧栏不动'],
+  ['bandShowTitle', '时间线标题栏显示左侧内容', false, '已去掉图标、「旅途名 · 时间线」和「N 个节点」，勾选可对比原样'],
+  ['hourTicks', '显示 6 / 12 / 18 点刻度', true, '新增：时间轴上的小时刻度'],
+  ['bandFollow', '时间线跟随选中滚动', true, '现状：开启（Scrollable.ensureVisible alignment 0.5）'],
+];
+
+const DEF = {};
+PARAMS.forEach(p => DEF[p[0]] = p[2]);
+STRINGS.forEach(s => DEF['s_' + s[0]] = s[2]);
+TOGGLES.forEach(t => DEF['t_' + t[0]] = t[2]);
+let P = { ...DEF };
+const STORE = 'travellog-proto-v1';
+try { const saved = JSON.parse(localStorage.getItem(STORE) || '{}'); // Old defaults saved by v1 of this page yield to the new ones.
+  if (saved.s_dayPill === '第{n}天') delete saved.s_dayPill;
+  if (saved.s_dayDate === '{m}月{d}日') delete saved.s_dayDate;
+  if ([26, 10].includes(saved.dotD)) delete saved.dotD;
+  if (saved.bandH === 148) delete saved.bandH;
+  if ([32, 14].includes(saved.dotSelD)) delete saved.dotSelD;
+  for (const k in saved) if (k in DEF) P[k] = saved[k]; } catch (e) {}
+function save() { try { localStorage.setItem(STORE, JSON.stringify(P)); } catch (e) {} }
+const S = (k, vars = {}) => String(P['s_' + k]).replace(/\{(\w+)\}/g, (m, v) => v in vars ? vars[v] : m);
+
+/* ======================= sample data (prototype only) ======================= */
+const TRIP = { id: 't1', title: '京都之旅', start: new Date(2025, 3, 3), end: new Date(2025, 3, 8), companions: ['小林', '阿宽'] };
+const TYPES = {
+  place: ['地点', 'place'], photo: ['照片', 'photo_camera'], drawing: ['画', 'brush'],
+  story: ['故事', 'auto_stories'], essay: ['随笔', 'edit_note'],
+};
+const SEED = [
+  { id: 'e1', type: 'place', title: '伏见稻荷大社', body: '千本鸟居，清晨人少的时候最好看。', t: [3, 9, 30], lat: 34.9671, lng: 135.7727, place: '伏见稻荷大社', g: '⛩️', imgs: 0 },
+  { id: 'e2', type: 'photo', title: '', body: '参道边的狐狸乌冬，油扬很甜。', t: [3, 12, 40], lat: 34.9688, lng: 135.7702, place: '稻荷参道', g: '🍜', imgs: 1 },
+  { id: 'e3', type: 'place', title: '东福寺', body: '通天桥上的枫叶还没红，绿得很安静。', t: [3, 16, 10], lat: 34.9767, lng: 135.7738, place: '东福寺', g: '🍁', imgs: 0 },
+  { id: 'e4', type: 'place', title: '清水寺', body: '清水舞台人很多，往下看是一片新绿。', t: [4, 10, 0], lat: 34.9949, lng: 135.7850, place: '清水寺', g: '🏯', imgs: 0 },
+  { id: 'e5', type: 'photo', title: '鸭川边的午后', body: '', t: [4, 15, 10], lat: 35.0116, lng: 135.7681, place: '鸭川', g: '📷', imgs: 2 },
+  { id: 'e6', type: 'drawing', title: '岚山竹林速写', body: '', t: [5, 11, 0], lat: 35.0170, lng: 135.6717, place: '岚山', g: '🎨', imgs: 1 },
+  { id: 'e7', type: 'essay', title: '关于旅行的意义', body: '走得越远，越明白自己想留下的其实是那些说不清的瞬间……', t: [5, 21, 0], lat: 35.0036, lng: 135.7780, place: '祇园', g: '✍️', imgs: 0 },
+  { id: 'e8', type: 'story', title: '', body: '哲学之道的樱花落了一地，阿宽说明年还要再来。', t: [6, 8, 30], lat: 35.0270, lng: 135.7940, place: '哲学之道', g: '🌸', imgs: 0 },
+  { id: 'e9', type: 'photo', title: '金阁寺', body: '', t: [6, 14, 0], lat: 35.0394, lng: 135.7292, place: '金阁寺', g: '✨', imgs: 3 },
+  { id: 'e10', type: 'story', title: '', body: '临走前在京都站买了八桥，小林一路上吃掉了半盒。', t: [8, 10, 20], lat: 34.9858, lng: 135.7588, place: '京都站', g: '🚄', imgs: 0 },
+];
+let entries = [];
+function resetData() {
+  entries = SEED.map(e => ({ ...e, ts: new Date(2025, 3, e.t[0], e.t[1], e.t[2]) }));
+}
+resetData();
+const displayTitle = e => e.title || e.place || (e.body.length > 30 ? e.body.slice(0, 30) + '…' : e.body) || TYPES[e.type][0];
+const dayIndex = ts => Math.max(1, Math.round((new Date(ts.getFullYear(), ts.getMonth(), ts.getDate()) - TRIP.start) / 864e5) + 1);
+const pad = n => String(n).padStart(2, '0');
+const dv = (n, f) => ({ n, m: f.getMonth() + 1, d: f.getDate(), mm: pad(f.getMonth() + 1), dd: pad(f.getDate()) });
+const fmtDot = d => `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+
+/* ======================= colours (ported from map_screen.dart) ======================= */
+function hsl(h, s, l) {
+  const a = s * Math.min(l, 1 - l), f = n => { const k = (n + h / 30) % 12; return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+  return [f(0), f(8), f(4)].map(x => Math.round(x * 255));
+}
+const rgb = (c, a = 1) => a === 1 ? `rgb(${c})` : `rgba(${c},${a})`;
+// Pre-mixed onto the panel surface (like Color.alphaBlend), so a day pill is
+// fully opaque and the rail doesn't show through it.
+const SURFACE = [245, 251, 247];
+const blend = (c, a) => c.map((v, i) => Math.round(v * a + SURFACE[i] * (1 - a)));
+const tripColor = () => hsl(P.tripHue, .55, .45);
+function dayColor(day, lastDay) {
+  if (lastDay <= 1) return tripColor();
+  const t = (day - 1) / (lastDay - 1);
+  return hsl(P.tripHue, .55, P.dayLightStart + (P.dayLightEnd - P.dayLightStart) * t);
+}
+const dayLight = (day, lastDay) => lastDay <= 1 ? .45 : P.dayLightStart + (P.dayLightEnd - P.dayLightStart) * (day - 1) / (lastDay - 1);
+const readable = (day, lastDay) => dayLight(day, lastDay) <= .45 ? dayColor(day, lastDay) : hsl(P.tripHue, .55, .35);
+const darken = (day, lastDay) => hsl(P.tripHue, .55, Math.max(0, dayLight(day, lastDay) - .25));
+function photoBg(e, i = 0) {
+  const h = (e.id.charCodeAt(1) * 47 + i * 33) % 360;
+  return `linear-gradient(135deg, hsl(${h} 45% 78%), hsl(${(h + 40) % 360} 40% 58%))`;
+}
+
+/* ======================= view state ======================= */
+let tripOpen = true, expanded = true, sel = null, armed = null, armTimer = null;
+let frame = 'fit';
+const FRAMES = { fit: '适应窗口', '1280x800': '1280×800', '1440x900': '1440×900', '1920x1080': '1920×1080', '1024x700': '1024×700' };
+let W = 1280, H = 800;
+
+const $ = s => document.querySelector(s);
+const app = $('#app'), overlay = $('#overlay'), svg = $('#mapSvg'), world = $('#world'), marks = $('#marks');
+let proj = null, cam = [0, 0], hoverId = null, hoverTimer = null;
+let appScale = 1;
+let poppedId = null; // the selection whose bubble already played its pop-in
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ======================= frame sizing ======================= */
+function layoutFrame() {
+  const st = $('#stage').getBoundingClientRect();
+  let w, h, scale;
+  if (frame === 'fit' && st.width >= 720) { w = st.width; h = st.height; scale = 1; }
+  else {
+    const [fw, fh] = frame === 'fit' ? [1280, 800] : frame.split('x').map(Number);
+    w = fw; h = fh; scale = Math.min(st.width / fw, st.height / fh);
+  }
+  W = Math.round(w); H = Math.round(h);
+  app.style.width = W + 'px'; app.style.height = H + 'px';
+  app.style.transform = `scale(${scale})`;
+  appScale = scale;
+  app.style.left = Math.max(0, (st.width - W * scale) / 2) + 'px';
+  app.style.top = Math.max(0, (st.height - H * scale) / 2) + 'px';
+}
+
+/* ======================= map ======================= */
+function projector() {
+  // Fit the records into the map area the floating panels leave visible
+  // (always measured with the band expanded, so collapsing doesn't pan the map).
+  const lats = SEED.map(e => e.lat), lngs = SEED.map(e => e.lng);
+  const [la0, la1, lo0, lo1] = [Math.min(...lats), Math.max(...lats), Math.min(...lngs), Math.max(...lngs)];
+  const k = Math.cos(35 * Math.PI / 180);
+  const x0 = 110, x1 = W - P.panelWidth - P.margin * 2 - 60;
+  const y0 = 150, y1 = H - P.bandH - P.margin * 2 - 60;
+  const s = Math.min((x1 - x0) / ((lo1 - lo0) * k), (y1 - y0) / (la1 - la0));
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, mlo = (lo0 + lo1) / 2, mla = (la0 + la1) / 2;
+  return { p: (lat, lng) => [cx + (lng - mlo) * k * s, cy - (lat - mla) * s], s };
+}
+function catmull(pts) {
+  if (pts.length < 3) return 'M' + pts.map(p => p.join(',')).join('L');
+  const q = [pts[0], ...pts, pts[pts.length - 1]];
+  let d = `M${pts[0]}`;
+  for (let i = 1; i < q.length - 2; i++) {
+    const [p0, p1, p2, p3] = [q[i - 1], q[i], q[i + 1], q[i + 2]];
+    d += `C${p1[0] + (p2[0] - p0[0]) / 6},${p1[1] + (p2[1] - p0[1]) / 6} ${p2[0] - (p3[0] - p1[0]) / 6},${p2[1] - (p3[1] - p1[1]) / 6} ${p2[0]},${p2[1]}`;
+  }
+  return d;
+}
+function renderMap() {
+  const { p, s } = projector();
+  const line = (coords, cls) => 'M' + coords.map(c => p(c[0], c[1]).join(',')).join('L');
+  // Kyoto's street grid: a detail of the place, drawn as light roads.
+  let grid = '';
+  for (let la = 34.94; la <= 35.07; la += 0.009) grid += `M${p(la, 135.64)}L${p(la, 135.82)}`;
+  for (let lo = 135.64; lo <= 135.82; lo += 0.009) grid += `M${p(34.94, lo)}L${p(35.07, lo)}`;
+  const kamo = [[35.07, 135.768], [35.045, 135.772], [35.028, 135.772], [35.0116, 135.7705], [34.995, 135.7695], [34.975, 135.767], [34.95, 135.764]];
+  const katsura = [[35.035, 135.66], [35.015, 135.678], [34.99, 135.695], [34.965, 135.712], [34.94, 135.725]];
+  const parks = [[35.012, 135.662, .018], [35.0045, 135.7815, .004], [35.0215, 135.7625, .006], [34.967, 135.781, .007], [35.03, 135.80, .012], [35.04, 135.726, .006]];
+  const km = s * 0.009; // px per km at this latitude
+  let html = `<rect width="${W}" height="${H}" fill="var(--land)"/>`;
+  parks.forEach(([la, lo, r]) => { const [x, y] = p(la, lo); html += `<circle cx="${x}" cy="${y}" r="${r * s}" fill="var(--park)" opacity=".85"/>`; });
+  html += `<path d="${grid}" stroke="var(--road-edge)" stroke-width="3" fill="none"/><path d="${grid}" stroke="var(--road)" stroke-width="1.6" fill="none"/>`;
+  html += `<path d="${line(kamo)}" stroke="var(--water)" stroke-width="${Math.max(4, km * .12)}" fill="none" stroke-linejoin="round" stroke-linecap="round"/>`;
+  html += `<path d="${line(katsura)}" stroke="var(--water)" stroke-width="${Math.max(5, km * .18)}" fill="none" stroke-linejoin="round" stroke-linecap="round"/>`;
+  const lbl = (la, lo, t) => { const [x, y] = p(la, lo); return `<text x="${x}" y="${y}" font-size="12" fill="#6b7a8f" font-style="italic" text-anchor="middle">${t}</text>`; };
+  html += lbl(35.052, 135.779, '鸭川') + lbl(34.975, 135.699, '桂川') + lbl(35.06, 135.70, '右京区') + lbl(34.955, 135.745, '南区');
+  // Route legs: one curve per trip-day, coloured by day.
+  const days = groupDays();
+  const lastDay = Math.max(...Object.keys(days).map(Number), 1);
+  for (const d in days) {
+    const pts = days[d].map(e => p(e.lat, e.lng));
+    if (pts.length < 2) continue;
+    html += `<path d="${catmull(pts)}" stroke="${rgb(dayColor(+d, lastDay))}" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = html;
+  return { p, lastDay };
+}
+function groupDays() {
+  const g = {};
+  [...entries].sort((a, b) => a.ts - b.ts).forEach(e => (g[dayIndex(e.ts)] ||= []).push(e));
+  return g;
+}
+
+/* ======================= overlay (markers, chrome, panels) ======================= */
+function render() {
+  hideTip();
+  const bodyScroll = $('#plist')?.scrollTop, bandScroll = $('#brow')?.scrollLeft;
+  const r = document.documentElement.style;
+  ['radius', 'panelTitleFs', 'panelSubFs', 'dayHeaderFs', 'cardTitleFs', 'cardBodyFs', 'nodeTitleFs', 'timeFs', 'dayPillFs', 'railW', 'bandCollapsedH']
+    .forEach(k => r.setProperty('--' + k, P[k] + 'px'));
+  r.setProperty('--cardBodyLines', P.cardBodyLines);
+  r.setProperty('--dotHoverScale', P.dotHoverScale);
+  r.setProperty('--mapDotHoverScale', P.mapDotHoverScale);
+  r.setProperty('--dotHit', P.dotHit + 'px');
+  r.setProperty('--tipMaxW', P.tipMaxW + 'px');
+  r.setProperty('--bubbleDur', P.bubbleDur + 'ms');
+  r.setProperty('--bubbleDelay', P.bubbleDelay + 'ms');
+
+  const { p, lastDay } = renderMap();
+  proj = p;
+  world.style.transform = `translate(${cam[0]}px, ${cam[1]}px)`;
+  const bandHeight = expanded ? P.bandH : P.bandCollapsedH;
+  const bottomInset = tripOpen ? bandHeight + P.margin + P.gap : 0;
+  let h = '';
+
+  // Markers: every record is the same route-coloured dot, image or not.
+  const byTime = [...entries].sort((a, b) => a.ts - b.ts);
+  for (const e of byTime) {
+    const [x, y] = p(e.lat, e.lng), d = dayIndex(e.ts);
+    h += `<div class="mk mk-dot" data-sel="${e.id}" style="left:${x}px;top:${y}px;background:${rgb(dayColor(d, lastDay))};border:1.4px solid ${rgb(darken(d, lastDay))}"></div>`;
+  }
+  const se = entries.find(e => e.id === sel);
+  if (!se) poppedId = null;
+  if (se) {
+    const [x, y] = p(se.lat, se.lng);
+    const pop = poppedId !== se.id; poppedId = se.id;
+    h += `<div class="bubble${pop ? ' pop' : ''}" style="left:${x}px;top:${y}px;transform:translateY(calc(-100% - 12px))"><div class="frost"><div class="inner">
+      ${se.imgs ? `<div class="ph" style="background:${photoBg(se)}">${se.g}${se.imgs > 1 ? `<span class="cnt"><span class="ms">photo_library</span>${se.imgs}</span>` : ''}</div>` : ''}
+      <div class="bd"><div class="hd"><span class="g">${se.g}</span><span class="tt">${esc(displayTitle(se))}</span><button data-act="desel" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
+      <div class="pl">📍 ${esc(se.place)}</div>${se.body ? `<div class="bo">${esc(se.body)}</div>` : ''}</div></div></div></div>`;
+  }
+  marks.innerHTML = h;
+  h = '';
+  if (!tripOpen) {
+    h += `<div class="hintchip">旅途已关闭 · 点左上角「旅途」按钮重新打开</div>`;
+  }
+
+  // Left bubbles, bottom-left settings + scale, attribution.
+  h += `<button class="fab ${tripOpen ? '' : ''}" data-act="trips" title="旅途" style="left:20px;top:20px;width:56px;height:56px"><span class="ms">list_alt</span></button>`;
+  h += `<button class="fab" data-act="toast" data-msg="浏览面板不在本原型范围内" title="浏览" style="left:20px;top:90px;width:56px;height:56px"><span class="ms">explore</span></button>`;
+  h += `<button class="fab" data-act="toast" data-msg="地图设置不在本原型范围内" title="地图设置" style="left:16px;bottom:${16 + bottomInset}px;width:48px;height:48px"><span class="ms">style</span></button>`;
+  h += `<div class="scale" style="bottom:${72 + bottomInset}px">2 km<div class="bar"></div></div>`;
+  h += `<div class="attrib" style="bottom:${6 + bottomInset}px">© OpenStreetMap contributors</div>`;
+
+  if (tripOpen) h += panelHtml(bandHeight) + bandHtml(bandHeight, lastDay);
+  overlay.innerHTML = h;
+
+  if (bodyScroll != null && $('#plist')) $('#plist').scrollTop = bodyScroll;
+  if (bandScroll != null && $('#brow')) $('#brow').scrollLeft = bandScroll;
+  $('#brow')?.addEventListener('wheel', ev => {
+    if (ev.deltaX !== 0) return;
+    ev.preventDefault(); ev.currentTarget.scrollLeft += ev.deltaY;
+  }, { passive: false });
+}
+
+function panelHtml(bandHeight) {
+  const n = entries.length;
+  let list = '';
+  if (!n) list = `<div class="empty">这趟旅途还没有记录</div>`;
+  const days = groupDays();
+  for (const d of Object.keys(days).map(Number).sort((a, b) => a - b)) {
+    const f = days[d][0].ts;
+    list += `<div class="dayh">${esc(S('dayHeader', { n: d, m: f.getMonth() + 1, d: f.getDate() }))}</div>`;
+    for (const e of days[d]) list += cardHtml(e);
+  }
+  return `<section id="panel" class="card-float" style="top:${P.margin}px;right:${P.margin}px;bottom:${P.margin + bandHeight + P.gap}px;width:${P.panelWidth}px">
+    <div class="ph-head"><div class="tx"><div class="ph-title">${esc(TRIP.title)}</div>
+      <div class="ph-sub">${esc(S('panelDates', { start: fmtDot(TRIP.start), end: fmtDot(TRIP.end), n }))}</div></div>
+      <button class="ibtn" data-act="closeTrip" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
+    <div class="hair"></div><div id="plist">${list}</div></section>`;
+}
+function cardHtml(e) {
+  let imgs = '';
+  if (e.imgs) {
+    const hh = e.imgs === 1 ? P.cardImgH : P.cardMultiImgH;
+    imgs = `<div class="imgs">${Array.from({ length: Math.min(e.imgs, 4) }, (_, i) => `<div class="ph" style="height:${hh}px;background:${photoBg(e, i)}">${e.g}</div>`).join('')}</div>`;
+  }
+  const ts = e.ts, when = `${fmtDot(ts)} ${pad(ts.getHours())}:${pad(ts.getMinutes())}`;
+  const del = armed === e.id
+    ? `<button class="confirm" data-act="confirmDel" data-id="${e.id}">${esc(S('confirmDelete'))}</button>`
+    : `<button class="ibtn" data-act="arm" data-id="${e.id}" title="删除"><span class="ms">delete</span></button>`;
+  return `<article class="ecard ${e.id === sel ? 'sel' : ''}" data-sel="${e.id}" data-card="${e.id}">${imgs}
+    <div class="rw"><div class="col">
+      ${e.title ? `<div class="ti">${esc(e.title)}</div>` : ''}
+      ${e.body ? `<div class="bo">${esc(e.body)}</div>` : ''}
+      ${!e.title && !e.body ? `<div class="ti">${TYPES[e.type][0]}</div>` : ''}
+      <div class="meta"><div class="l1"><span class="ms">${TYPES[e.type][1]}</span>${TYPES[e.type][0]}<span style="width:4px"></span><span class="ms">place</span><span class="pn">${esc(e.place)}</span></div>
+        <div class="sm">${when} · ${esc(TRIP.title)}</div>
+        <div class="sm">${esc(S('companions', { names: TRIP.companions.join('、') }))}</div></div>
+    </div>
+    <button class="ibtn" data-act="toast" data-msg="编辑会在卡片内展开记录表单（本原型不包含）" title="编辑"><span class="ms">edit</span></button>${del}</div></article>`;
+}
+function bandHtml(bandHeight, lastDay) {
+  const acc = rgb(tripColor());
+  // A true time axis: every trip day is one 24h span of equal width, the day's
+  // pill sits on its midnight, and each record's dot sits at its clock time.
+  const PAD = 44, dayLen = 24 * P.pxPerHour;
+  const totalDays = dayIndex(TRIP.end);
+  const X = (d, h = 0) => PAD + (d - 1) * dayLen + h * P.pxPerHour;
+  const RAIL_Y = 26; // centre line of the rail within the track
+  let html = '';
+  // Rail: one segment per day, in that day's route colour.
+  for (let d = 1; d <= totalDays; d++) {
+    const c = dayColor(Math.min(d, lastDay), lastDay);
+    html += `<i class="seg" style="left:${X(d)}px;width:${dayLen}px;top:${RAIL_Y}px;background:${rgb(c, P.railAlpha)}"></i>`;
+    if (P.t_hourTicks) for (const h of [6, 12, 18]) {
+      html += `<i class="tick" style="left:${X(d, h)}px;top:${RAIL_Y - 3}px;background:${rgb(c, Math.min(1, P.railAlpha + .2))}"></i><span class="tickl" style="left:${X(d, h)}px">${h}</span>`;
+    }
+  }
+  // Items along the axis (midnight pills and record dots), used to keep each
+  // label from running into its neighbours.
+  const items = [];
+  for (let d = 1; d <= totalDays; d++) items.push({ x: X(d), day: d });
+  const sorted = [...entries].sort((a, b) => a.ts - b.ts);
+  for (const e of sorted) items.push({ x: X(dayIndex(e.ts), e.ts.getHours() + e.ts.getMinutes() / 60), e });
+  items.sort((a, b) => a.x - b.x);
+  for (const it of items) {
+    if (it.day) {
+      const d = it.day, c = dayColor(Math.min(d, lastDay), lastDay);
+      const f = new Date(TRIP.start.getFullYear(), TRIP.start.getMonth(), TRIP.start.getDate() + d - 1);
+      html += `<div class="tday" style="left:${it.x}px"><div class="dotrow"><span class="pill" style="background:${rgb(blend(c, .16))};border:1px solid ${rgb(blend(c, .55))};color:${rgb(readable(Math.min(d, lastDay), lastDay))}">${esc(S('dayPill', dv(d, f)))}</span></div><div class="dd">${esc(S('dayDate', dv(d, f)))}</div></div>`;
+    } else {
+      const e = it.e, d = dayIndex(e.ts), c = dayColor(d, lastDay);
+      const s = e.id === sel, dd = s ? P.dotSelD : P.dotD;
+      html += `<div class="tnode ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="left:${it.x - P.dotHit / 2}px;width:${P.dotHit}px">
+        <div class="dotrow"><span class="hit"><span class="dot" style="width:${dd}px;height:${dd}px;background:${rgb(c)};border:${s ? 1.5 : 1}px solid var(--surface);${s ? `box-shadow:0 0 0 1px ${rgb(c)}, 0 0 5px 1px ${rgb(c, .45)};` : ''}"></span></span></div></div>`;
+    }
+  }
+  const cells = `<div class="track" style="width:${X(totalDays + 1) + PAD}px">${html}</div>`;
+  return `<section id="band" class="card-float" style="left:${P.margin}px;right:${P.margin}px;bottom:${P.margin}px;height:${bandHeight}px">
+    <div class="bh">${P.t_bandShowTitle ? `<span class="ms ic" style="color:${acc}">timeline</span><span class="ti">${esc(S('bandTitle', { trip: TRIP.title }))}</span>
+      <span class="n">${esc(S('bandCount', { n: entries.length }))}</span>` : ''}<span class="sp"></span>
+      <button class="ibtn cmp" data-act="toggleBand" title="${esc(expanded ? S('collapse') : S('expand'))}"><span class="ms">${expanded ? 'keyboard_arrow_down' : 'keyboard_arrow_up'}</span></button>
+      <button class="ibtn cmp" data-act="closeTrip" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
+    ${expanded ? `<div class="hair"></div>${entries.length ? `<div id="brow">${cells}</div>` : `<div class="empty">${esc(S('bandEmpty'))}</div>`}` : ''}</section>`;
+}
+
+/* ======================= interactions ======================= */
+/* Pan the map so a record sits in the middle of the map area the floating
+   panels leave uncovered. The world layer's CSS transition does the easing. */
+function centerMap(id) {
+  const e = entries.find(x => x.id === id);
+  if (!e || !proj) return;
+  const [x, y] = proj(e.lat, e.lng);
+  const bandHeight = expanded ? P.bandH : P.bandCollapsedH;
+  const cx = (W - (tripOpen ? P.panelWidth + P.margin * 2 : 0)) / 2;
+  const cy = (H - (tripOpen ? bandHeight + P.margin + P.gap : 0)) / 2;
+  cam = [cx - x, cy - y];
+  world.style.transform = `translate(${cam[0]}px, ${cam[1]}px)`;
+}
+/* Scroll the records panel so a record's card sits in its vertical middle. */
+function centerPanel(id) {
+  const list = $('#plist'), card = document.querySelector(`[data-card="${id}"]`);
+  if (!list || !card) return;
+  const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+  list.scrollTo({ top: card.offsetTop - list.clientHeight / 2 + card.offsetHeight / 2, behavior: smooth });
+}
+function select(id, source) {
+  sel = id; render();
+  if (!id) return;
+  if (source === 'node' && P.t_hoverLink) { centerMap(id); centerPanel(id); }
+  const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+  if (P.t_bandFollow) {
+    const n = document.querySelector(`[data-node="${id}"]`), row = $('#brow');
+    if (n && row) row.scrollTo({ left: n.offsetLeft - row.clientWidth / 2 + n.offsetWidth / 2, behavior: smooth });
+  }
+  if (P.t_panelFollow && source !== 'card') {
+    document.querySelector(`[data-card="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: smooth });
+  }
+}
+function toast(msg) {
+  document.querySelector('.toast')?.remove();
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; app.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
+// Hovering a timeline dot (its hit ring, not the text) previews that record:
+// the map pans to it and the records panel scrolls to it. A short delay keeps a
+// quick sweep across the band from yanking both views back and forth.
+function showTip(hit, id) {
+  const tip = $('#tip'), e = entries.find(x => x.id === id);
+  if (!hit || !e) { tip.hidden = true; return; }
+  const a = app.getBoundingClientRect(), r = hit.getBoundingClientRect();
+  tip.style.left = ((r.left + r.width / 2 - a.left) / appScale) + 'px';
+  tip.style.top = ((r.top - a.top) / appScale) + 'px';
+  tip.innerHTML = `<div class="frost"><div class="tm">${esc(S('tipTime', { date: `${pad(e.ts.getMonth() + 1)}-${pad(e.ts.getDate())}`, time: `${pad(e.ts.getHours())}:${pad(e.ts.getMinutes())}` }))}</div><div class="lb">${esc(displayTitle(e))}</div></div>`;
+  tip.hidden = false;
+}
+const markMapHover = id => {
+  marks.querySelectorAll('.mk-dot.hov').forEach(m => m.classList.remove('hov'));
+  if (id) marks.querySelector(`.mk-dot[data-sel="${id}"]`)?.classList.add('hov');
+};
+const hideTip = () => { $('#tip').hidden = true; hoverId = null; markMapHover(null); };
+// Only the band scrolling moves the dot out from under its tooltip.
+app.addEventListener('scroll', ev => { if (ev.target.id === 'brow') hideTip(); }, true);
+app.addEventListener('mouseover', ev => {
+  const hit = ev.target.closest('.hit');
+  const id = hit ? hit.closest('[data-node]').dataset.node : null;
+  if (id === hoverId) return;
+  hoverId = id; clearTimeout(hoverTimer);
+  showTip(hit, id);
+  markMapHover(id);
+  if (id && P.t_hoverLink) hoverTimer = setTimeout(() => { centerMap(id); centerPanel(id); }, 90);
+});
+app.addEventListener('click', ev => {
+  const a = ev.target.closest('[data-act]');
+  if (a) {
+    ev.stopPropagation();
+    const act = a.dataset.act;
+    if (act === 'desel') select(null);
+    else if (act === 'closeTrip') { tripOpen = false; render(); }
+    else if (act === 'trips') { if (!tripOpen) { tripOpen = true; render(); } else toast('在真实应用里，这里打开「旅途」列表面板'); }
+    else if (act === 'toggleBand') { expanded = !expanded; render(); }
+    else if (act === 'toast') toast(a.dataset.msg);
+    else if (act === 'arm') {
+      armed = a.dataset.id; render(); clearTimeout(armTimer);
+      armTimer = setTimeout(() => { armed = null; render(); }, 3000);
+    } else if (act === 'confirmDel') {
+      clearTimeout(armTimer); entries = entries.filter(e => e.id !== a.dataset.id);
+      if (sel === a.dataset.id) sel = null; armed = null; render(); toast('已删除（原型数据，重置可恢复）');
+    }
+    return;
+  }
+  const s = ev.target.closest('[data-sel]');
+  if (s) { select(s.dataset.sel, s.dataset.node ? 'node' : s.dataset.card ? 'card' : 'map'); return; }
+  if (!ev.target.closest('.card-float, .bubble')) select(null);
+});
+
+/* ======================= tuning drawer ======================= */
+function buildDock() {
+  const groups = {};
+  PARAMS.forEach(p => (groups[p[7]] ||= []).push(p));
+  let h = `<details open><summary>画布尺寸</summary><div class="seg" id="frameSeg">${Object.entries(FRAMES).map(([k, v]) => `<button data-frame="${k}" aria-pressed="${k === frame}">${v}</button>`).join('')}</div></details>`;
+  for (const g in groups) {
+    h += `<details ${g === '底部时间线' ? 'open' : ''}><summary>${g}</summary>`;
+    groups[g].forEach(([k, label, def, min, max, step, dart]) => {
+      h += `<div class="row" data-row="${k}"><label for="n_${k}">${label}</label><input type="number" id="n_${k}" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${P[k]}">
+        <input type="range" id="r_${k}" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${P[k]}" aria-label="${label}"><span class="dart">${dart} · 默认 ${def}</span></div>`;
+    });
+    h += `</details>`;
+  }
+  h += `<details><summary>交互</summary>${TOGGLES.map(([k, label, def, note]) => `<label class="check"><input type="checkbox" id="t_${k}" data-t="${k}" ${P['t_' + k] ? 'checked' : ''}><span>${label}<small>${note}</small></span></label>`).join('')}
+    <button class="btn-ghost" id="dataReset" style="border-radius:6px;padding:5px 10px;font-size:12px">恢复示例数据</button></details>`;
+  h += `<details><summary>文案</summary>${STRINGS.map(([k, label, def, ph]) => `<div class="srow" data-srow="${k}"><label for="s_${k}">${label} ${ph ? `<span>${ph}</span>` : ''}</label><input id="s_${k}" data-s="${k}" value="${esc(P['s_' + k])}"></div>`).join('')}</details>`;
+  $('#dockBody').innerHTML = h;
+  markChanged();
+}
+function markChanged() {
+  PARAMS.forEach(([k]) => document.querySelector(`[data-row="${k}"]`)?.classList.toggle('changed', P[k] !== DEF[k]));
+  STRINGS.forEach(([k]) => document.querySelector(`[data-srow="${k}"]`)?.classList.toggle('changed', P['s_' + k] !== DEF['s_' + k]));
+  const diff = {};
+  PARAMS.forEach(([k, label, def, , , , dart]) => { if (P[k] !== def) diff[k] = { value: P[k], was: def, dart }; });
+  STRINGS.forEach(([k, label, def]) => { if (P['s_' + k] !== def) diff['text.' + k] = { value: P['s_' + k], was: def }; });
+  TOGGLES.forEach(([k, label, def]) => { if (P['t_' + k] !== def) diff['behavior.' + k] = { value: P['t_' + k], was: def, label }; });
+  $('#out').value = Object.keys(diff).length ? JSON.stringify({ travellog_prototype: 'trip_open', changes: diff }, null, 1) : '（还没有改动）';
+}
+$('#dockBody').addEventListener('input', ev => {
+  const t = ev.target;
+  if (t.dataset.k) {
+    const k = t.dataset.k, v = parseFloat(t.value);
+    if (Number.isNaN(v)) return;
+    P[k] = v;
+    document.querySelectorAll(`[data-k="${k}"]`).forEach(el => { if (el !== t) el.value = v; });
+  } else if (t.dataset.s) P['s_' + t.dataset.s] = t.value;
+  else if (t.dataset.t) P['t_' + t.dataset.t] = t.checked;
+  else return;
+  save(); markChanged(); render();
+});
+$('#dockBody').addEventListener('click', ev => {
+  const f = ev.target.closest('[data-frame]');
+  if (f) {
+    frame = f.dataset.frame;
+    document.querySelectorAll('[data-frame]').forEach(b => b.setAttribute('aria-pressed', b.dataset.frame === frame));
+    layoutFrame(); render();
+  }
+  if (ev.target.id === 'dataReset') { resetData(); sel = null; tripOpen = true; render(); }
+});
+$('#resetBtn').addEventListener('click', () => { P = { ...DEF }; save(); buildDock(); render(); });
+$('#copyBtn').addEventListener('click', async () => {
+  const b = $('#copyBtn');
+  try { await navigator.clipboard.writeText($('#out').value); b.textContent = '已复制'; }
+  catch (e) { $('#out').select(); b.textContent = '已选中，按 Ctrl+C'; }
+  setTimeout(() => b.textContent = '复制改动', 1800);
+});
+function setDock(open) {
+  $('#dock').hidden = !open; $('#dockToggle').hidden = open;
+  layoutFrame(); render();
+}
+$('#dockClose').addEventListener('click', () => setDock(false));
+$('#dockToggle').addEventListener('click', () => setDock(true));
+addEventListener('resize', () => { layoutFrame(); render(); });
+
+buildDock();
+if (innerWidth < 700) { $('#dock').hidden = true; $('#dockToggle').hidden = false; }
+layoutFrame();
+sel = 'e5';
+render();
+requestAnimationFrame(() => select('e5', 'map'));
+</script>

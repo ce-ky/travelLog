@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -24,12 +25,17 @@ class TripRecordsPanel extends StatelessWidget {
   /// in the list so the panel mirrors the map's selection.
   final String? selectedEntryId;
 
+  /// Scrolls the record with the reported id to the middle of the list — the
+  /// map drives this when a timeline dot is hovered or tapped.
+  final ValueListenable<String?>? reveal;
+
   const TripRecordsPanel({
     super.key,
     required this.tripId,
     this.onClose,
     this.onRecordTap,
     this.selectedEntryId,
+    this.reveal,
   });
 
   @override
@@ -88,6 +94,7 @@ class TripRecordsPanel extends StatelessWidget {
                   tripStart: trip.startDate,
                   onEntryTap: onRecordTap,
                   selectedEntryId: selectedEntryId,
+                  reveal: reveal,
                 ),
         ),
       ],
