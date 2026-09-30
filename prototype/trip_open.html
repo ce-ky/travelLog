@@ -172,14 +172,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 #band .bh .ti { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 #band .bh .n { font-size: 11px; color: var(--hint); margin-left: 8px; white-space: nowrap; }
 #band .bh .sp { flex: 1; }
-#brow { flex: 1; overflow-x: auto; overflow-y: hidden; display: flex; scrollbar-width: thin; }
+#brow { flex: 1; overflow-x: auto; overflow-y: hidden; display: flex; }
+/* Light grey scrollbar with no arrow buttons (Chrome/Edge/Safari). */
+#brow::-webkit-scrollbar { height: 6px; }
+#brow::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+#brow::-webkit-scrollbar-track { background: transparent; }
+#brow::-webkit-scrollbar-thumb { background: var(--rail); border-radius: 3px; }
+#brow::-webkit-scrollbar-thumb:hover { background: var(--rail-tick); }
+@supports not selector(::-webkit-scrollbar) { #brow { scrollbar-width: thin; scrollbar-color: var(--rail) transparent; } }
+.arcs { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.arcs path { fill: none; stroke: var(--rail); stroke-width: 1; }
+.dayl { position: absolute; transform: translate(-50%, -50%); padding: 0 6px; background: var(--surface); color: var(--hint); font-size: var(--dayArcFs); white-space: nowrap; }
 .track { position: relative; flex: none; height: 100%; }
 /* The time rail and its hour ticks stay a neutral light grey whatever the trip's colour. */
 .rseg { position: absolute; height: var(--railW); margin-top: calc(var(--railW) / -2); background: var(--rail); }
 .tick { position: absolute; width: 1px; height: 4px; background: var(--rail-tick); }
 .tick.major { height: 7px; }
 .tickl { position: absolute; top: 4px; transform: translateX(-50%); font-size: 9px; color: var(--hint); opacity: .8; font-variant-numeric: tabular-nums; }
-.tday { position: absolute; top: 8px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; z-index: 1; }
 .tnode { position: absolute; top: 8px; display: flex; flex-direction: column; align-items: center; z-index: 2; }
 .dotrow { height: 36px; display: grid; place-items: center; }
 /* Hover tooltip for a timeline dot: the record's time and title, shown only
@@ -189,11 +198,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 #tip .tm { font-size: var(--timeFs); color: var(--hint); font-variant-numeric: tabular-nums; line-height: 1.3; }
 #tip .lb { font-size: var(--nodeTitleFs); font-weight: 600; color: var(--on-surface); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 @keyframes tipIn { from { opacity: 0; transform: translateY(4px) scale(.94); } to { opacity: 1; transform: none; } }
-.tday .dd { height: 16px; margin-top: 4px; line-height: 16px; font-size: 11px; color: var(--hint); white-space: nowrap; }
 .hit { display: grid; place-items: center; width: var(--dotHit); height: var(--dotHit); border-radius: 50%; cursor: pointer; }
 .dot { display: block; border-radius: 50%; box-sizing: border-box; transition: width .15s, height .15s, transform .18s cubic-bezier(.2,.9,.3,1.4); }
 .hit:hover .dot { transform: scale(var(--dotHoverScale)); }
-.pill { padding: 3px 8px; border-radius: 9px; font-weight: 700; font-size: var(--dayPillFs); white-space: nowrap; }
 .empty { flex: 1; display: grid; place-items: center; color: var(--hint); }
 
 .toast { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); background: #323232; color: #fff; padding: 10px 16px; border-radius: 4px; font-size: 14px; z-index: 30; }
@@ -248,7 +255,8 @@ const PARAMS = [
   ['dotHoverScale', '鼠标移入放大倍数', 1.8, 1, 3, 0.1, '新增：hover 放大动画', '底部时间线'],
   ['nodeTitleFs', '节点标题字号', 12, 10, 16, 0.5, '_nodeCell · fontSize: 12', '底部时间线'],
   ['timeFs', '时间字号', 11, 9, 14, 0.5, '_nodeCell · HH:mm fontSize: 11', '底部时间线'],
-  ['dayPillFs', '日期胶囊字号', 12.5, 9, 14, 0.5, '_dayCell · fontSize: 11', '底部时间线'],
+  ['dayArcFs', '天数字号', 12, 9, 16, 0.5, '新增：天数弧线中心的「第N天」', '底部时间线'],
+  ['arcDepth', '天数弧线深度', 30, 12, 80, 1, '新增：0 时到 24 时弧线的下沉高度', '底部时间线'],
   ['railW', '轨道线粗细', 1, 1, 5, 0.5, '_rail · height: 2', '底部时间线'],
   ['panelTitleFs', '旅途标题字号', 22, 16, 28, 1, 'TripRecordsPanel · titleLarge', '右侧记录栏'],
   ['panelSubFs', '日期行字号', 12, 10, 15, 0.5, 'TripRecordsPanel · fontSize: 12', '右侧记录栏'],
@@ -270,8 +278,7 @@ const STRINGS = [
   ['bandEmpty', '时间线空状态', '这趟旅途还没有记录', ''],
   ['collapse', '收起按钮提示', '收起时间线', ''],
   ['expand', '展开按钮提示', '展开时间线', ''],
-  ['dayPill', '日期胶囊', '{mm}-{dd}', '{mm} {dd} {n}'],
-  ['dayDate', '胶囊下小字', '第{n}天', '{n} {m} {d} {mm} {dd}'],
+  ['dayArc', '天数弧线文字', '第{n}天', '{n}'],
   ['panelDates', '右侧栏日期行', '{start} – {end} · {n} 条记录', '{start} {end} {n}'],
   ['dayHeader', '分组标题', '第{n}天', '{n} {m} {d}'],
   ['companions', '同行者（右侧栏标题下）', '与 {names}', '{names}'],
@@ -450,7 +457,7 @@ function render() {
   hideTip();
   const bodyScroll = $('#plist')?.scrollTop, bandScroll = $('#brow')?.scrollLeft;
   const r = document.documentElement.style;
-  ['radius', 'panelTitleFs', 'panelSubFs', 'dayHeaderFs', 'cardTitleFs', 'cardBodyFs', 'nodeTitleFs', 'timeFs', 'dayPillFs', 'railW', 'bandCollapsedH']
+  ['radius', 'panelTitleFs', 'panelSubFs', 'dayHeaderFs', 'cardTitleFs', 'cardBodyFs', 'nodeTitleFs', 'timeFs', 'dayArcFs', 'railW', 'bandCollapsedH']
     .forEach(k => r.setProperty('--' + k, P[k] + 'px'));
   r.setProperty('--cardBodyLines', P.cardBodyLines);
   r.setProperty('--dotHoverScale', P.dotHoverScale);
@@ -544,37 +551,38 @@ function cardHtml(e) {
 }
 function bandHtml(bandHeight, lastDay) {
   const acc = rgb(tripColor());
-  // A true time axis: every trip day is one 24h span of equal width, the day's
-  // pill sits on its midnight, and each record's dot sits at its clock time.
+  // A true time axis: every trip day is one 24h span of equal width, a light
+  // grey arc spans each day from 0h to 24h with the day number at its centre,
+  // and each record's dot sits at its clock time.
   const PAD = 44, dayLen = 24 * P.pxPerHour;
   const totalDays = dayIndex(TRIP.end);
   const X = (d, h = 0) => PAD + (d - 1) * dayLen + h * P.pxPerHour;
   const RAIL_Y = 26; // centre line of the rail within the track
   let html = '';
-  // Rail: one segment per day, in that day's route colour.
+  const tick = (x, major) => `<i class="tick${major ? ' major' : ''}" style="left:${x}px;top:${RAIL_Y - (major ? 3.5 : 2)}px"></i>`;
+  const arcBottom = RAIL_Y + P.arcDepth;
+  let arcs = '';
   for (let d = 1; d <= totalDays; d++) {
-    const c = dayColor(Math.min(d, lastDay), lastDay);
     html += `<i class="rseg" style="left:${X(d)}px;width:${dayLen}px;top:${RAIL_Y}px"></i>`;
-    // One tick per hour (midnight carries the day pill); 6/12/18 are longer and labelled.
-    for (let h = 1; h < 24; h++) {
+    // One tick per hour; midnight and 6/12/18 are longer, and only 6/12/18 carry a number.
+    for (let h = 0; h < 24; h++) {
       const major = h % 6 === 0;
-      html += `<i class="tick${major ? ' major' : ''}" style="left:${X(d, h)}px;top:${RAIL_Y - (major ? 3.5 : 2)}px"></i>`;
-      if (major && P.t_hourTicks) html += `<span class="tickl" style="left:${X(d, h)}px">${h}</span>`;
+      html += tick(X(d, h), major);
+      if (major && h && P.t_hourTicks) html += `<span class="tickl" style="left:${X(d, h)}px">${h}</span>`;
     }
+    // The day's arc: from this midnight to the next, dipping below the rail.
+    const x0 = X(d), x1 = X(d + 1), xm = (x0 + x1) / 2;
+    arcs += `<path d="M${x0} ${RAIL_Y} Q${xm} ${RAIL_Y + 2 * P.arcDepth} ${x1} ${RAIL_Y}"/>`;
+    html += `<span class="dayl" style="left:${xm}px;top:${arcBottom}px">${esc(S('dayArc', { n: d }))}</span>`;
   }
-  // Items along the axis (midnight pills and record dots), used to keep each
-  // label from running into its neighbours.
+  html += tick(X(totalDays + 1), true);
+  html = `<svg class="arcs" width="${X(totalDays + 1) + PAD}" height="${arcBottom + 4}" aria-hidden="true">${arcs}</svg>` + html;
   const items = [];
-  for (let d = 1; d <= totalDays; d++) items.push({ x: X(d), day: d });
   const sorted = [...entries].sort((a, b) => a.ts - b.ts);
   for (const e of sorted) items.push({ x: X(dayIndex(e.ts), e.ts.getHours() + e.ts.getMinutes() / 60), e });
   items.sort((a, b) => a.x - b.x);
   for (const it of items) {
-    if (it.day) {
-      const d = it.day, c = dayColor(Math.min(d, lastDay), lastDay);
-      const f = new Date(TRIP.start.getFullYear(), TRIP.start.getMonth(), TRIP.start.getDate() + d - 1);
-      html += `<div class="tday" style="left:${it.x}px"><div class="dotrow"><span class="pill" style="background:${rgb(blend(c, .16))};border:1px solid ${rgb(blend(c, .55))};color:${rgb(readable(Math.min(d, lastDay), lastDay))}">${esc(S('dayPill', dv(d, f)))}</span></div><div class="dd">${esc(S('dayDate', dv(d, f)))}</div></div>`;
-    } else {
+    if (!it.day) {
       const e = it.e, d = dayIndex(e.ts), c = dayColor(d, lastDay);
       const s = e.id === sel, dd = s ? P.dotSelD : P.dotD;
       html += `<div class="tnode ${s ? 'sel' : ''}" data-sel="${e.id}" data-node="${e.id}" style="left:${it.x - P.dotHit / 2}px;width:${P.dotHit}px">
@@ -587,7 +595,7 @@ function bandHtml(bandHeight, lastDay) {
       <span class="n">${esc(S('bandCount', { n: entries.length }))}</span>` : ''}<span class="sp"></span>
       <button class="ibtn cmp" data-act="toggleBand" title="${esc(expanded ? S('collapse') : S('expand'))}"><span class="ms">${expanded ? 'keyboard_arrow_down' : 'keyboard_arrow_up'}</span></button>
       <button class="ibtn cmp" data-act="closeTrip" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
-    ${expanded ? `<div class="hair"></div>${entries.length ? `<div id="brow">${cells}</div>` : `<div class="empty">${esc(S('bandEmpty'))}</div>`}` : ''}</section>`;
+    ${expanded ? `${entries.length ? `<div id="brow">${cells}</div>` : `<div class="empty">${esc(S('bandEmpty'))}</div>`}` : ''}</section>`;
 }
 
 /* ======================= interactions ======================= */
