@@ -63,10 +63,10 @@ Screens ──> AppState (ChangeNotifier) ──> TravelRepository (interface)
   map); hovering a dot springs it up, and tapping one centres it in the area
   the floating panels leave uncovered, scrolls the records panel to it and
   pops its bubble out of the map point. No emoji are drawn anywhere. Trips' daily legs
-  are joined by route lines and told apart by their cluster colour when zoomed
-  out. A zoomed-out cluster bubble reads as the trip's date range
-  (`2025.4.3~4.8`, or `~至今` while it's still running) — the trip's name is one
-  tap away, in the records panel.
+  are joined by route lines. A zoomed-out cluster bubble reads only as the
+  trip's date range (`2025.4.3~4.8`, or `~至今` while it's still running) — no
+  colour dot, no record count; the trip's name and records are one tap away, in
+  the records panel.
 - **Trip timeline (`trip_timeline_bar.dart`)** — wide (web/desktop) layout only:
   opening a trip (cluster tap, or a pick in the 旅途 panel) puts a band along the
   bottom of the map. It is a true time axis: each trip day is an equal 24-hour

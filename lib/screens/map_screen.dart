@@ -898,15 +898,23 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           width: 190,
                           height: 50,
                           alignment: Alignment.topCenter,
-                          child: _HoverScale(
+                          // Loosen the marker's width so the bubble hugs its
+                          // date text, centred over the point (tail unmoved).
+                          child: Align(
                             alignment: Alignment.bottomCenter,
-                            child: _TripCluster(
-                              dates: _tripDateRange(
-                                  appState.tripById(group.key)),
-                              count: group.value.length,
-                              color: _tripColor(group.key),
-                              onTap: () => _openTripPanel(group.key,
-                                  [for (final e in group.value) e.location!.latLng]),
+                            child: SizedBox(
+                              height: 50,
+                              child: _HoverScale(
+                                alignment: Alignment.bottomCenter,
+                                child: _TripCluster(
+                                  dates: _tripDateRange(
+                                      appState.tripById(group.key)),
+                                  onTap: () => _openTripPanel(group.key, [
+                                    for (final e in group.value)
+                                      e.location!.latLng
+                                  ]),
+                                ),
+                              ),
                             ),
                           ),
                         )
@@ -1383,17 +1391,11 @@ String _tripDateRange(Trip trip) {
   return '$from~$to';
 }
 
-/// A stable colour per trip, so each trip's connecting line is distinguishable.
-Color _tripColor(String tripId) {
-  final hue = (tripId.hashCode % 360).abs().toDouble();
-  return HSLColor.fromAHSL(1, hue, 0.55, 0.45).toColor();
-}
-
-/// [_tripColor]'s hue, stepping in lightness from day 1 to [lastDay] — a
-/// gentle deep → light progression (0.43 → 0.57) so a trip's daily route legs
-/// read in order without any day fading out, while distinct trips are still
-/// told apart by hue. A single-day trip (lastDay == 1) just gets [_tripColor]
-/// unchanged.
+/// A stable per-trip hue (from the trip id), stepping in lightness from day 1
+/// to [lastDay] — a gentle deep → light progression (0.43 → 0.57) so a trip's
+/// daily route legs read in order without any day fading out, while distinct
+/// trips are still told apart by hue. A single-day trip (lastDay == 1) just
+/// gets the hue at lightness 0.45.
 Color _tripDayColor(String tripId, int day, int lastDay) {
   final hue = (tripId.hashCode % 360).abs().toDouble();
   if (lastDay <= 1) return HSLColor.fromAHSL(1, hue, 0.55, 0.45).toColor();
@@ -1517,24 +1519,17 @@ LatLng _centroid(List<Entry> entries) {
   return LatLng(lat / entries.length, lng / entries.length);
 }
 
-/// The collapsed, zoomed-out marker for a whole trip: when it ran (see
-/// [_tripDateRange]) and how many records it holds, in a bubble. Tapping it
-/// zooms in to reveal the individual records.
+/// The collapsed, zoomed-out marker for a whole trip: just when it ran (see
+/// [_tripDateRange]), in a bubble — no colour dot, no record count. Tapping it
+/// opens the trip.
 class _TripCluster extends StatelessWidget {
-  /// The trip's date range — what the bubble reads at this zoom. The trip's
-  /// name is one tap away, in the records panel and the bottom timeline.
+  /// The trip's date range — all the bubble reads at this zoom. The trip's
+  /// name and record count are one tap away, in the records panel.
   final String dates;
 
-  final int count;
-  final Color color;
   final VoidCallback onTap;
 
-  const _TripCluster({
-    required this.dates,
-    required this.count,
-    required this.color,
-    required this.onTap,
-  });
+  const _TripCluster({required this.dates, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1545,40 +1540,17 @@ class _TripCluster extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(dates,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black87)),
-                ),
-                const SizedBox(width: 6),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text('$count',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: color)),
-                ),
-              ],
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            // widthFactor 1: as wide as the text, vertically centred.
+            child: Align(
+              widthFactor: 1,
+              child: Text(dates,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black87)),
             ),
           ),
         ),
