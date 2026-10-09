@@ -71,6 +71,25 @@ class TripRecordsPanel extends StatelessWidget {
                     Text('$dates · ${entries.length} 条记录',
                         style: TextStyle(
                             fontSize: 12, color: theme.hintColor)),
+                    // Who came along belongs to the whole trip, so it's said
+                    // once here rather than on every record card.
+                    if (trip.companions.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.group_outlined,
+                              size: 15, color: theme.hintColor),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              '与 ${trip.companions.map((p) => p.name).join('、')}',
+                              style: TextStyle(
+                                  fontSize: 12, color: theme.hintColor),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),

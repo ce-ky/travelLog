@@ -10,6 +10,7 @@ import 'package:travel_log/data/mock_travel_repository.dart';
 import 'package:travel_log/main.dart';
 import 'package:travel_log/screens/new_entry_sheet.dart';
 import 'package:travel_log/state/app_state.dart';
+import 'package:travel_log/widgets/trip_records_panel.dart';
 import 'package:travel_log/widgets/trip_timeline_bar.dart';
 
 /// A 1x1 transparent PNG, so the map renders without touching the network.
@@ -413,11 +414,11 @@ void main() {
               (w.richMessage?.toPlainText().contains(title) ?? false)),
         );
 
-    // Every day of the trip (4/3–4/8) has its midnight pill and 第N天 label...
-    expect(inBand('04-03'), findsOneWidget);
-    expect(inBand('04-08'), findsOneWidget);
-    expect(inBand('第1天'), findsOneWidget);
-    expect(inBand('第3天'), findsOneWidget);
+    // Every day of the trip (4/3–4/8) has its arc, labelled DAY n, and no
+    // calendar dates are printed on the band...
+    expect(inBand('DAY 1'), findsOneWidget);
+    expect(inBand('DAY 6'), findsOneWidget);
+    expect(inBand('04-03'), findsNothing);
     // ...the titles aren't printed on the band itself...
     expect(inBand('伏见稻荷大社'), findsNothing);
     // ...each of the trip's records is a dot, carrying its time and title...
@@ -426,10 +427,20 @@ void main() {
     // ...and nothing from the other trip.
     expect(dotFor('洱海速写'), findsNothing);
 
-    // Collapsing leaves the header strip and takes the dots away.
-    await tester.tap(find.byTooltip('收起时间线'));
+    // The records panel beside it names the companions once, in its header,
+    // and groups the records under DAY n.
+    final panel = find.byType(TripRecordsPanel);
+    expect(find.descendant(of: panel, matching: find.text('与 小林、阿宽')),
+        findsOneWidget);
+    expect(find.descendant(of: panel, matching: find.text('DAY 1')),
+        findsOneWidget);
+
+    // There's no collapse control any more; closing shrinks both cards away
+    // and then closes the trip.
+    expect(find.byTooltip('收起时间线'), findsNothing);
+    await tester.tap(find.descendant(of: band, matching: find.byTooltip('关闭')));
     await tester.pumpAndSettle();
-    expect(band, findsOneWidget);
-    expect(dotFor('伏见稻荷大社'), findsNothing);
+    expect(band, findsNothing);
+    expect(panel, findsNothing);
   });
 }
