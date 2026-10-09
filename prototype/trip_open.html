@@ -1,4 +1,4 @@
-<title>TravelLog 旅途原型</title>
+<title>TravelLog 桌面原型</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0,0&display=block">
@@ -86,6 +86,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* ---------------- stage + scaled app window ---------------- */
 #stage { flex: 1; min-width: 0; position: relative; overflow: hidden; background: #2a312e; }
 #dockToggle { position: absolute; left: 10px; top: 10px; z-index: 50; background: var(--dock-bg); color: var(--dock-fg); border: 1px solid var(--dock-line); border-radius: 16px; padding: 5px 12px 5px 8px; font-size: 12px; display: flex; gap: 4px; align-items: center; }
+#dockToggle[hidden] { display: none; }
 #dockToggle .ms { font-size: 18px; }
 #app { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; background: var(--land); font-size: 14px; box-shadow: 0 0 0 1px rgba(0,0,0,.3); }
 
@@ -203,6 +204,67 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .hit:hover .dot { transform: scale(var(--dotHoverScale)); }
 .empty { flex: 1; display: grid; place-items: center; color: var(--hint); }
 
+/* ---- 旅途 / 浏览 floating section panel (HomeShell._SidePanel) ---- */
+#nav { z-index: 6; }
+#nav .nh { display: flex; align-items: center; padding: 10px 6px 10px 16px; flex: none; }
+#nav .nh .ti { flex: 1; font-size: var(--navTitleFs); font-weight: 700; }
+#nav .nb { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.scrollv { flex: 1; min-height: 0; overflow-y: auto; }
+.div1 { height: 1px; background: var(--outline-variant); flex: none; }
+.vdiv { width: 1px; background: var(--outline-variant); flex: none; }
+.cempty { flex: 1; display: grid; place-items: center; color: var(--on-surface); text-align: center; padding: 0 16px; font-size: 14px; }
+/* trips */
+.trows { display: flex; flex: 1; min-height: 0; }
+.tlist { padding: 8px 0; }
+.newtrip { margin: 6px 12px; border-radius: 12px; border: 1px solid rgba(43,106,91,.4); background: rgba(43,106,91,.04); color: var(--primary); font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 15px 0; width: calc(100% - 24px); }
+.newtrip:hover { background: rgba(43,106,91,.1); }
+.tcard { margin: 6px 12px; border-radius: 12px; background: var(--surface-low); box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 1px 3px rgba(0,0,0,.1); padding: 14px 8px 14px 16px; display: flex; align-items: flex-start; cursor: pointer; transition: background .15s; }
+.tcard:hover { background: #e7eeea; }
+.tcard .col { flex: 1; min-width: 0; }
+.tcard .tt { font-size: var(--tripCardTitleFs); font-weight: 500; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tcard .mt { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
+.mchip, .tcard .wi { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--hint); min-width: 0; }
+.mchip span:last-child, .tcard .wi span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mchip .ms, .tcard .wi .ms { font-size: 14px; }
+.tcard .wi { margin-top: 4px; }
+.pickp { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--hint); text-align: center; overflow: hidden; }
+.pickp .ms { font-size: 44px; }
+/* browse */
+.segw { display: flex; justify-content: center; padding: 8px 12px 4px; flex: none; }
+.segb { display: flex; border: 1px solid #6f7975; border-radius: 20px; overflow: hidden; height: 40px; }
+.segb button { display: flex; align-items: center; gap: 8px; padding: 0 16px; font-size: 14px; font-weight: 500; color: var(--on-surface); }
+.segb button + button { border-left: 1px solid #6f7975; }
+.segb button .ms { font-size: 18px; }
+.segb button[aria-pressed=true] { background: var(--secondary-container); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px 8px; padding: 8px 12px; flex: none; align-items: center; }
+.chip { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 16px 0 8px; border-radius: 8px; border: 1px solid var(--outline-variant); font-size: 14px; font-weight: 500; color: var(--on-surface-variant); }
+.chip:hover { background: rgba(0,0,0,.04); }
+.chip .ms { font-size: 18px; color: var(--primary); }
+.chip[aria-pressed=true] { background: var(--secondary-container); border-color: transparent; color: var(--on-surface); }
+.chip[aria-pressed=true] .ms { color: var(--on-surface); }
+.chip .av { width: 20px; height: 20px; border-radius: 50%; background: var(--secondary-container); color: var(--primary); font-size: 11px; display: grid; place-items: center; }
+.chead { display: flex; align-items: center; padding: 12px 8px 8px 16px; flex: none; }
+.chead .ti { flex: 1; font-size: 14px; font-weight: 500; }
+.chead .ibtn .ms { font-size: 20px; }
+/* popup menu + dialogs */
+.scrim { position: absolute; inset: 0; z-index: 40; }
+.scrim.dim { background: rgba(0,0,0,.32); display: grid; place-items: center; }
+.menu { position: absolute; z-index: 41; background: #e9efeb; border-radius: 4px; padding: 8px 0; min-width: 180px; box-shadow: 0 2px 6px rgba(0,0,0,.2), 0 6px 14px rgba(0,0,0,.12); animation: tipIn .12s ease-out both; transform-origin: 100% 0; }
+.menu button { display: flex; align-items: center; gap: 16px; width: 100%; padding: 0 16px 0 12px; height: 48px; font-size: 16px; text-align: left; }
+.menu button:hover { background: rgba(0,0,0,.06); }
+.menu button .ms { color: var(--on-surface-variant); }
+.dlg { background: #e9efeb; border-radius: 28px; padding: 24px; width: 312px; max-width: calc(100% - 80px); box-shadow: 0 6px 18px rgba(0,0,0,.24); animation: tipIn .16s ease-out both; }
+.dlg h2 { font-size: 24px; font-weight: 400; margin: 0 0 16px; }
+.dlg p { margin: 0; font-size: 14px; line-height: 1.43; color: var(--on-surface-variant); }
+.dlg input { width: 100%; border: 0; border-bottom: 1px solid var(--on-surface-variant); background: transparent; font: inherit; font-size: 16px; padding: 8px 0; outline: none; }
+.dlg input:focus { border-bottom: 2px solid var(--primary); padding-bottom: 7px; }
+.dlg .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.dlg .acts button { height: 40px; padding: 0 16px; border-radius: 20px; font-weight: 500; font-size: 14px; color: var(--primary); }
+.dlg .acts button:hover { background: rgba(43,106,91,.08); }
+.dlg .acts .fill { background: var(--primary); color: var(--on-primary); padding: 0 24px; }
+.dlg .acts .fill:hover { background: #33776a; }
+.dlg .acts .fill.err { background: var(--error); }
+
 .toast { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); background: #323232; color: #fff; padding: 10px 16px; border-radius: 4px; font-size: 14px; z-index: 30; }
 /* Closing a trip: each card shrinks towards its anchor and fades. */
 #panel { transform-origin: 100% 0; }
@@ -273,7 +335,14 @@ const PARAMS = [
   ['cardBodyLines', '正文最多行数', 4, 1, 8, 1, 'EntryCard · maxLines: 4', '右侧记录栏'],
   ['cardImgH', '单图高度', 168, 80, 240, 4, '_ImageStrip · height: 168', '右侧记录栏'],
   ['cardMultiImgH', '多图高度', 92, 56, 160, 2, '_ImageStrip · height: 92', '右侧记录栏'],
-  ['tripHue', '旅途色相 (H)', 108, 0, 359, 1, '_tripColor · hue 由 trip.id 哈希决定', '颜色'],
+  ['navPanelWidth', '浮窗宽度', 450, 300, 620, 2, 'home_shell.dart · panelWidth 450（窗口窄时为 宽 - 40）', '旅途/浏览浮窗'],
+  ['navInset', '浮窗与圆形按钮外边距', 20, 8, 40, 1, 'home_shell.dart · left/top/right/bottom: 20', '旅途/浏览浮窗'],
+  ['navTitleFs', '浮窗标题字号', 16, 12, 22, 0.5, '_SidePanel · titleMedium bold', '旅途/浏览浮窗'],
+  ['bubbleD', '圆形按钮直径', 56, 36, 72, 1, '_Bubble · d 56（退出 44）', '旅途/浏览浮窗'],
+  ['bubbleGap', '圆形按钮间距', 14, 4, 32, 1, 'home_shell.dart · SizedBox(height: 14)', '旅途/浏览浮窗'],
+  ['tripListW', '旅途列表宽度', 360, 200, 520, 4, 'trips_screen.dart · SizedBox(width: 360)', '旅途/浏览浮窗'],
+  ['tripCardTitleFs', '旅途卡片标题字号', 16, 12, 22, 0.5, '_TripCard · titleMedium', '旅途/浏览浮窗'],
+  ['tripHue', '京都之旅色相 (H)', 108, 0, 359, 1, '_tripColor · hue 由 trip.id 哈希决定', '颜色'],
   ['dayLightStart', '第1天亮度 (L)', 0.43, 0.3, 0.9, 0.01, '_tripDayColor · 0.70', '颜色'],
   ['dayLightEnd', '最后一天亮度 (L)', 0.57, 0.15, 0.7, 0.01, '_tripDayColor · 0.30', '颜色'],
 ];
@@ -286,11 +355,24 @@ const STRINGS = [
   ['collapse', '收起按钮提示', '收起时间线', ''],
   ['expand', '展开按钮提示', '展开时间线', ''],
   ['dayArc', '天数弧线文字', 'DAY {n}', '{n}'],
-  ['panelDates', '右侧栏日期行', '{start} – {end} · {n} 条记录', '{start} {end} {n}'],
+  ['panelDates', '右侧栏日期行', '{dates} · {n} 条记录', '{dates} {n}'],
+  ['tripOngoing', '进行中旅途的日期', '{start} 起 · 进行中', '{start}'],
   ['dayHeader', '分组标题', 'DAY {n}', '{n} {m} {d}'],
   ['companions', '同行者（右侧栏标题下）', '与 {names}', '{names}'],
   ['confirmDelete', '删除二次确认', '是否确认？', ''],
   ['close', '关闭按钮提示', '关闭', ''],
+  ['navTrips', '旅途浮窗标题 / 按钮提示', '旅途', ''],
+  ['navBrowse', '浏览浮窗标题 / 按钮提示', '浏览', ''],
+  ['newTrip', '新建旅途行', '新建旅途', ''],
+  ['tripCount', '旅途卡片记录数', '{n} 条记录', '{n}'],
+  ['pickPrompt', '旅途列表右侧提示', '点击左侧的旅途，查看它的全部记录', ''],
+  ['segType', '浏览分段：类型', '按类型', ''],
+  ['segCompanion', '浏览分段：同行人', '按同行人', ''],
+  ['typeEmpty', '按类型空状态', '没有符合条件的记录', ''],
+  ['addPerson', '添加同行人 chip', '添加', ''],
+  ['companionPrompt', '未选同行人提示', '选择一位同行人，查看一起去过的地方', ''],
+  ['companionHeader', '同行人标题', '与 {name} · {n} 处', '{name} {n}'],
+  ['companionEmpty', '同行人无记录', '还没有和 TA 一起的记录', ''],
 ];
 const TOGGLES = [
   ['hoverLink', '移入圆点联动地图与右侧栏', true, '新增：移入圆点时地图平移、右侧栏滚动，使该记录居中；点击时两处同时展开选中'],
@@ -298,6 +380,9 @@ const TOGGLES = [
   ['bandShowTitle', '时间线标题栏显示左侧内容', false, '已去掉图标、「旅途名 · 时间线」和「N 个节点」，勾选可对比原样'],
   ['hourTicks', '显示 6 / 12 / 18 点标注', true, '每小时一个刻度；只有 6 / 12 / 18 点带数字'],
   ['bandFollow', '时间线跟随选中滚动', true, '现状：开启（Scrollable.ensureVisible alignment 0.5）'],
+  ['navClosesOnPick', '在旅途浮窗选中旅途后关闭浮窗', true, '现状：点一趟旅途 → 浮窗关闭，地图打开该旅途的右侧记录栏和时间线'],
+  ['tripsPickPrompt', '旅途浮窗保留右侧提示栏', true, '现状：窗口宽 ≥720 时 TripsScreen 仍按两栏排，列表 360 宽，右边剩一条窄提示栏'],
+  ['browseKeepState', '浏览浮窗记住模式与同行人', false, '现状：关闭后状态随面板销毁，再打开回到「按类型」、同行人未选；类型筛选存在 AppState 里会保留'],
 ];
 
 const DEF = {};
@@ -311,6 +396,7 @@ try { const saved = JSON.parse(localStorage.getItem(STORE) || '{}'); // Old defa
   if (saved.s_dayDate === '{m}月{d}日') delete saved.s_dayDate;
   if (['第{n}天 · {m}月{d}日', '第{n}天'].includes(saved.s_dayHeader)) delete saved.s_dayHeader;
   if (saved.s_dayArc === '第{n}天') delete saved.s_dayArc;
+  if (saved.s_panelDates === '{start} – {end} · {n} 条记录') delete saved.s_panelDates;
   if ([26, 10].includes(saved.dotD)) delete saved.dotD;
   if (saved.bandH === 148) delete saved.bandH;
   if ([32, 14].includes(saved.dotSelD)) delete saved.dotSelD;
@@ -319,33 +405,60 @@ function save() { try { localStorage.setItem(STORE, JSON.stringify(P)); } catch 
 const S = (k, vars = {}) => String(P['s_' + k]).replace(/\{(\w+)\}/g, (m, v) => v in vars ? vars[v] : m);
 
 /* ======================= sample data (prototype only) ======================= */
-const TRIP = { id: 't1', title: '京都之旅', start: new Date(2025, 3, 3), end: new Date(2025, 3, 8), companions: ['小林', '阿宽'] };
+// Several trips (all around Kyoto so the one drawn map serves them all) and a
+// few companions, so the 旅途 and 浏览 panels have something to list.
+const PEOPLE_SEED = [{ id: 'p1', name: '小林' }, { id: 'p2', name: '阿宽' }, { id: 'p3', name: '美咲' }];
+const TRIPS_SEED = [
+  { id: 't1', title: '京都之旅', start: new Date(2025, 3, 3), end: new Date(2025, 3, 8), companions: ['p1', 'p2'] },
+  { id: 't2', title: '岚山赏枫', start: new Date(2024, 10, 20), end: new Date(2024, 10, 22), companions: ['p3'], hue: 18 },
+  { id: 't3', title: '秋天的京都散步', start: new Date(2025, 8, 27), end: null, companions: [], hue: 212 },
+];
 const TYPES = {
   place: ['地点', 'place'], photo: ['照片', 'photo_camera'], drawing: ['画', 'brush'],
   story: ['故事', 'auto_stories'], essay: ['随笔', 'edit_note'],
 };
 const SEED = [
-  { id: 'e1', type: 'place', title: '伏见稻荷大社', body: '千本鸟居，清晨人少的时候最好看。', t: [3, 9, 30], lat: 34.9671, lng: 135.7727, place: '伏见稻荷大社', imgs: 0 },
-  { id: 'e2', type: 'photo', title: '', body: '参道边的狐狸乌冬，油扬很甜。', t: [3, 12, 40], lat: 34.9688, lng: 135.7702, place: '稻荷参道', imgs: 1 },
-  { id: 'e3', type: 'place', title: '东福寺', body: '通天桥上的枫叶还没红，绿得很安静。', t: [3, 16, 10], lat: 34.9767, lng: 135.7738, place: '东福寺', imgs: 0 },
-  { id: 'e4', type: 'place', title: '清水寺', body: '清水舞台人很多，往下看是一片新绿。', t: [4, 10, 0], lat: 34.9949, lng: 135.7850, place: '清水寺', imgs: 0 },
-  { id: 'e5', type: 'photo', title: '鸭川边的午后', body: '', t: [4, 15, 10], lat: 35.0116, lng: 135.7681, place: '鸭川', imgs: 2 },
-  { id: 'e6', type: 'drawing', title: '岚山竹林速写', body: '', t: [5, 11, 0], lat: 35.0170, lng: 135.6717, place: '岚山', imgs: 1 },
-  { id: 'e7', type: 'essay', title: '关于旅行的意义', body: '走得越远，越明白自己想留下的其实是那些说不清的瞬间……', t: [5, 21, 0], lat: 35.0036, lng: 135.7780, place: '祇园', imgs: 0 },
-  { id: 'e8', type: 'story', title: '', body: '哲学之道的樱花落了一地，阿宽说明年还要再来。', t: [6, 8, 30], lat: 35.0270, lng: 135.7940, place: '哲学之道', imgs: 0 },
-  { id: 'e9', type: 'photo', title: '金阁寺', body: '', t: [6, 14, 0], lat: 35.0394, lng: 135.7292, place: '金阁寺', imgs: 3 },
-  { id: 'e10', type: 'story', title: '', body: '临走前在京都站买了八桥，小林一路上吃掉了半盒。', t: [8, 10, 20], lat: 34.9858, lng: 135.7588, place: '京都站', imgs: 0 },
+  { id: 'e1', trip: 't1', type: 'place', title: '伏见稻荷大社', body: '千本鸟居，清晨人少的时候最好看。', t: [2025, 4, 3, 9, 30], lat: 34.9671, lng: 135.7727, place: '伏见稻荷大社', imgs: 0 },
+  { id: 'e2', trip: 't1', type: 'photo', title: '', body: '参道边的狐狸乌冬，油扬很甜。', t: [2025, 4, 3, 12, 40], lat: 34.9688, lng: 135.7702, place: '稻荷参道', imgs: 1 },
+  { id: 'e3', trip: 't1', type: 'place', title: '东福寺', body: '通天桥上的枫叶还没红，绿得很安静。', t: [2025, 4, 3, 16, 10], lat: 34.9767, lng: 135.7738, place: '东福寺', imgs: 0 },
+  { id: 'e4', trip: 't1', type: 'place', title: '清水寺', body: '清水舞台人很多，往下看是一片新绿。', t: [2025, 4, 4, 10, 0], lat: 34.9949, lng: 135.7850, place: '清水寺', imgs: 0 },
+  { id: 'e5', trip: 't1', type: 'photo', title: '鸭川边的午后', body: '', t: [2025, 4, 4, 15, 10], lat: 35.0116, lng: 135.7681, place: '鸭川', imgs: 2 },
+  { id: 'e6', trip: 't1', type: 'drawing', title: '岚山竹林速写', body: '', t: [2025, 4, 5, 11, 0], lat: 35.0170, lng: 135.6717, place: '岚山', imgs: 1 },
+  { id: 'e7', trip: 't1', type: 'essay', title: '关于旅行的意义', body: '走得越远，越明白自己想留下的其实是那些说不清的瞬间……', t: [2025, 4, 5, 21, 0], lat: 35.0036, lng: 135.7780, place: '祇园', imgs: 0 },
+  { id: 'e8', trip: 't1', type: 'story', title: '', body: '哲学之道的樱花落了一地，阿宽说明年还要再来。', t: [2025, 4, 6, 8, 30], lat: 35.0270, lng: 135.7940, place: '哲学之道', imgs: 0 },
+  { id: 'e9', trip: 't1', type: 'photo', title: '金阁寺', body: '', t: [2025, 4, 6, 14, 0], lat: 35.0394, lng: 135.7292, place: '金阁寺', imgs: 3 },
+  { id: 'e10', trip: 't1', type: 'story', title: '', body: '临走前在京都站买了八桥，小林一路上吃掉了半盒。', t: [2025, 4, 8, 10, 20], lat: 34.9858, lng: 135.7588, place: '京都站', imgs: 0 },
+  { id: 'e11', trip: 't2', type: 'place', title: '嵯峨野小火车', body: '沿着保津川慢慢开，两岸全红了。', t: [2024, 11, 20, 10, 30], lat: 35.0167, lng: 135.6683, place: '嵯峨野', imgs: 0 },
+  { id: 'e12', trip: 't2', type: 'photo', title: '', body: '红叶铺满了常寂光寺的石阶。', t: [2024, 11, 20, 14, 0], lat: 35.0205, lng: 135.6697, place: '常寂光寺', imgs: 2 },
+  { id: 'e13', trip: 't2', type: 'story', title: '', body: '美咲在渡月桥边说，这是她见过最好看的秋天。', t: [2024, 11, 21, 17, 30], lat: 35.0094, lng: 135.6779, place: '渡月桥', imgs: 0 },
+  { id: 'e14', trip: 't2', type: 'essay', title: '秋天的颜色', body: '红不是一种颜色，是一整座山慢慢烧起来的过程。', t: [2024, 11, 22, 9, 0], lat: 35.0130, lng: 135.6750, place: '岚山', imgs: 0 },
+  { id: 'e15', trip: 't3', type: 'place', title: '下鸭神社', body: '糺之森里很凉快，蝉还在叫。', t: [2025, 9, 27, 16, 20], lat: 35.0390, lng: 135.7727, place: '下鸭神社', imgs: 0 },
+  { id: 'e16', trip: 't3', type: 'photo', title: '', body: '哲学之道边上的猫。', t: [2025, 9, 28, 11, 5], lat: 35.0270, lng: 135.7940, place: '哲学之道', imgs: 1 },
 ];
-let entries = [];
+let entries = [], trips = [], people = [];
 function resetData() {
-  entries = SEED.map(e => ({ ...e, ts: new Date(2025, 3, e.t[0], e.t[1], e.t[2]) }));
+  entries = SEED.map(e => ({ ...e, ts: new Date(e.t[0], e.t[1] - 1, e.t[2], e.t[3], e.t[4]) }));
+  trips = TRIPS_SEED.map(t => ({ ...t, companions: [...t.companions] }));
+  people = PEOPLE_SEED.map(p => ({ ...p }));
 }
 resetData();
 const displayTitle = e => e.title || e.place || (e.body.length > 30 ? e.body.slice(0, 30) + '…' : e.body) || '记录';
-const dayIndex = ts => Math.max(1, Math.round((new Date(ts.getFullYear(), ts.getMonth(), ts.getDate()) - TRIP.start) / 864e5) + 1);
+// The trip currently (or last) opened on the map; the map, records panel and
+// timeline all show this one.
+let curTripId = 't1';
+const trip = () => trips.find(t => t.id === curTripId) || trips[0];
+const tripEntries = (id = curTripId) => entries.filter(e => e.trip === id);
+const tripById = id => trips.find(t => t.id === id);
+const personName = id => people.find(p => p.id === id)?.name;
+const companionNames = t => t.companions.map(personName).filter(Boolean);
+// An ongoing trip (no end date) runs up to its latest record.
+const tripEnd = t => t.end || new Date(Math.max(t.start, ...tripEntries(t.id).map(e => e.ts)));
+const dayIndex = (ts, t = trip()) => Math.max(1, Math.round((new Date(ts.getFullYear(), ts.getMonth(), ts.getDate()) - t.start) / 864e5) + 1);
 const pad = n => String(n).padStart(2, '0');
 const dv = (n, f) => ({ n, m: f.getMonth() + 1, d: f.getDate(), mm: pad(f.getMonth() + 1), dd: pad(f.getDate()) });
 const fmtDot = d => `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+const fmtDateTime = d => `${fmtDot(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const tripDates = t => t.end ? `${fmtDot(t.start)} – ${fmtDot(t.end)}` : S('tripOngoing', { start: fmtDot(t.start) });
 
 /* ======================= colours (ported from map_screen.dart) ======================= */
 function hsl(h, s, l) {
@@ -357,15 +470,16 @@ const rgb = (c, a = 1) => a === 1 ? `rgb(${c})` : `rgba(${c},${a})`;
 // fully opaque and the rail doesn't show through it.
 const SURFACE = [245, 251, 247];
 const blend = (c, a) => c.map((v, i) => Math.round(v * a + SURFACE[i] * (1 - a)));
-const tripColor = () => hsl(P.tripHue, .55, .45);
+const tripHue = (t = trip()) => t.hue ?? P.tripHue;
+const tripColor = () => hsl(tripHue(), .55, .45);
 function dayColor(day, lastDay) {
   if (lastDay <= 1) return tripColor();
   const t = (day - 1) / (lastDay - 1);
-  return hsl(P.tripHue, .55, P.dayLightStart + (P.dayLightEnd - P.dayLightStart) * t);
+  return hsl(tripHue(), .55, P.dayLightStart + (P.dayLightEnd - P.dayLightStart) * t);
 }
 const dayLight = (day, lastDay) => lastDay <= 1 ? .45 : P.dayLightStart + (P.dayLightEnd - P.dayLightStart) * (day - 1) / (lastDay - 1);
-const readable = (day, lastDay) => dayLight(day, lastDay) <= .45 ? dayColor(day, lastDay) : hsl(P.tripHue, .55, .35);
-const darken = (day, lastDay) => hsl(P.tripHue, .55, Math.max(0, dayLight(day, lastDay) - .25));
+const readable = (day, lastDay) => dayLight(day, lastDay) <= .45 ? dayColor(day, lastDay) : hsl(tripHue(), .55, .35);
+const darken = (day, lastDay) => hsl(tripHue(), .55, Math.max(0, dayLight(day, lastDay) - .25));
 function photoBg(e, i = 0) {
   const h = (e.id.charCodeAt(1) * 47 + i * 33) % 360;
   return `linear-gradient(135deg, hsl(${h} 45% 78%), hsl(${(h + 40) % 360} 40% 58%))`;
@@ -374,6 +488,9 @@ function photoBg(e, i = 0) {
 /* ======================= view state ======================= */
 let tripOpen = true, expanded = true, sel = null, armed = null, armTimer = null;
 let frame = 'fit';
+// HomeShell's floating section panel: null | 'trips' | 'browse'.
+let nav = null, browseMode = 'type', compSel = null, menu = null, dialog = null;
+const typeFilter = new Set(); // lives in AppState, so it outlives the panel
 const FRAMES = { fit: '适应窗口', '1280x800': '1280×800', '1440x900': '1440×900', '1920x1080': '1920×1080', '1024x700': '1024×700' };
 let W = 1280, H = 800;
 
@@ -444,7 +561,7 @@ function renderMap() {
   html += lbl(35.052, 135.779, '鸭川') + lbl(34.975, 135.699, '桂川') + lbl(35.06, 135.70, '右京区') + lbl(34.955, 135.745, '南区');
   // Route legs: one curve per trip-day, coloured by day.
   const days = groupDays();
-  const lastDay = Math.max(...Object.keys(days).map(Number), 1);
+  const lastDay = dayIndex(tripEnd(trip()));
   for (const d in days) {
     const pts = days[d].map(e => p(e.lat, e.lng));
     if (pts.length < 2) continue;
@@ -456,17 +573,18 @@ function renderMap() {
 }
 function groupDays() {
   const g = {};
-  [...entries].sort((a, b) => a.ts - b.ts).forEach(e => (g[dayIndex(e.ts)] ||= []).push(e));
+  [...tripEntries()].sort((a, b) => a.ts - b.ts).forEach(e => (g[dayIndex(e.ts)] ||= []).push(e));
   return g;
 }
 
 /* ======================= overlay (markers, chrome, panels) ======================= */
 function render() {
   hideTip();
-  const bodyScroll = $('#plist')?.scrollTop, bandScroll = $('#brow')?.scrollLeft;
+  const navScroll = $('#navList')?.scrollTop, bodyScroll = $('#plist')?.scrollTop, bandScroll = $('#brow')?.scrollLeft;
   const r = document.documentElement.style;
   ['radius', 'panelTitleFs', 'panelSubFs', 'dayHeaderFs', 'cardTitleFs', 'cardBodyFs', 'nodeTitleFs', 'timeFs', 'dayArcFs', 'railW', 'bandCollapsedH']
     .forEach(k => r.setProperty('--' + k, P[k] + 'px'));
+  ['navTitleFs', 'tripCardTitleFs'].forEach(k => r.setProperty('--' + k, P[k] + 'px'));
   r.setProperty('--cardBodyLines', P.cardBodyLines);
   r.setProperty('--dotHoverScale', P.dotHoverScale);
   r.setProperty('--mapDotHoverScale', P.mapDotHoverScale);
@@ -484,12 +602,12 @@ function render() {
   let h = '';
 
   // Markers: every record is the same route-coloured dot, image or not.
-  const byTime = [...entries].sort((a, b) => a.ts - b.ts);
+  const byTime = [...tripEntries()].sort((a, b) => a.ts - b.ts);
   for (const e of byTime) {
     const [x, y] = p(e.lat, e.lng), d = dayIndex(e.ts);
     h += `<div class="mk mk-dot" data-sel="${e.id}" style="left:${x}px;top:${y}px;background:${rgb(dayColor(d, lastDay))};border:1.4px solid var(--dot-rim)"></div>`;
   }
-  const se = entries.find(e => e.id === sel);
+  const se = tripEntries().find(e => e.id === sel);
   if (!se) poppedId = null;
   if (se) {
     const [x, y] = p(se.lat, se.lng);
@@ -502,18 +620,28 @@ function render() {
   marks.innerHTML = h;
   h = '';
   if (!tripOpen) {
-    h += `<div class="hintchip">旅途已关闭 · 点左上角「旅途」按钮重新打开</div>`;
+    h += `<div class="hintchip">旅途已关闭 · 点左上角「旅途」按钮选一趟旅途打开</div>`;
   }
 
-  // Left bubbles, bottom-left settings + scale, attribution.
-  h += `<button class="fab ${tripOpen ? '' : ''}" data-act="trips" title="旅途" style="left:20px;top:20px;width:56px;height:56px"><span class="ms">list_alt</span></button>`;
-  h += `<button class="fab" data-act="toast" data-msg="浏览面板不在本原型范围内" title="浏览" style="left:20px;top:90px;width:56px;height:56px"><span class="ms">explore</span></button>`;
+  // Left bubbles (HomeShell: 旅途 / 浏览 / 退出), bottom-left settings + scale, attribution.
+  const bd = P.bubbleD, sd = 44, bx = P.navInset, by = P.navInset;
+  const bubble = (key, icon, title, top) => `<button class="fab${nav === key ? ' sel' : ''}" data-act="nav" data-nav="${key}" title="${esc(title)}" style="left:${bx}px;top:${top}px;width:${bd}px;height:${bd}px"><span class="ms">${icon}</span></button>`;
+  h += bubble('trips', 'list_alt', S('navTrips'), by);
+  h += bubble('browse', 'explore', S('navBrowse'), by + bd + P.bubbleGap);
+  h += `<button class="fab" data-act="toast" data-msg="退出：回到登录页（本原型不包含）" title="退出" style="left:${bx + (bd - sd) / 2}px;top:${by + 2 * (bd + P.bubbleGap)}px;width:${sd}px;height:${sd}px"><span class="ms" style="font-size:20px">logout</span></button>`;
   h += `<button class="fab" data-act="toast" data-msg="地图设置不在本原型范围内" title="地图设置" style="left:16px;bottom:${16 + bottomInset}px;width:48px;height:48px"><span class="ms">style</span></button>`;
   h += `<div class="scale" style="bottom:${72 + bottomInset}px">2 km<div class="bar"></div></div>`;
   h += `<div class="attrib" style="bottom:${6 + bottomInset}px">© OpenStreetMap contributors</div>`;
 
   if (tripOpen) h += panelHtml(bandHeight) + bandHtml(bandHeight, lastDay);
+  // HomeShell's Stack paints the section panel above the whole MapScreen, so it
+  // covers the records panel (and the right end of the timeline) while open.
+  if (nav) h += navHtml();
+  if (menu) h += menuHtml();
+  if (dialog) h += dialogHtml();
   overlay.innerHTML = h;
+  if (navScroll != null && $('#navList')) $('#navList').scrollTop = navScroll;
+  if (dialog) { const i = overlay.querySelector('.dlg input'); if (i) { i.focus(); i.select(); } else overlay.querySelector('.dlg .fill')?.focus(); }
 
   if (bodyScroll != null && $('#plist')) $('#plist').scrollTop = bodyScroll;
   if (bandScroll != null && $('#brow')) $('#brow').scrollLeft = bandScroll;
@@ -524,7 +652,7 @@ function render() {
 }
 
 function panelHtml(bandHeight) {
-  const n = entries.length;
+  const T = trip(), n = tripEntries().length;
   let list = '';
   if (!n) list = `<div class="empty">这趟旅途还没有记录</div>`;
   const days = groupDays();
@@ -534,13 +662,16 @@ function panelHtml(bandHeight) {
     for (const e of days[d]) list += cardHtml(e);
   }
   return `<section id="panel" class="card-float" style="top:${P.margin}px;right:${P.margin}px;bottom:${P.margin + bandHeight + P.gap}px;width:${P.panelWidth}px">
-    <div class="ph-head"><div class="tx"><div class="ph-title">${esc(TRIP.title)}</div>
-      <div class="ph-sub">${esc(S('panelDates', { start: fmtDot(TRIP.start), end: fmtDot(TRIP.end), n }))}</div>
-      ${TRIP.companions.length ? `<div class="ph-sub ph-with"><span class="ms">group</span>${esc(S('companions', { names: TRIP.companions.join('、') }))}</div>` : ''}</div>
+    <div class="ph-head"><div class="tx"><div class="ph-title">${esc(T.title)}</div>
+      <div class="ph-sub">${esc(S('panelDates', { dates: tripDates(T), n }))}</div>
+      ${companionNames(T).length ? `<div class="ph-sub ph-with"><span class="ms">group</span>${esc(S('companions', { names: companionNames(T).join('、') }))}</div>` : ''}</div>
       <button class="ibtn" data-act="closeTrip" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
     <div class="hair"></div><div id="plist">${list}</div></section>`;
 }
-function cardHtml(e) {
+// ctx = true is the plain list form (浏览 panel: EntryCard with showTripContext):
+// the type, "time · trip" and companions lines come back, and the card itself
+// is inert — only its edit / delete buttons respond.
+function cardHtml(e, ctx = false) {
   let imgs = '';
   if (e.imgs) {
     const hh = e.imgs === 1 ? P.cardImgH : P.cardMultiImgH;
@@ -549,12 +680,17 @@ function cardHtml(e) {
   const del = armed === e.id
     ? `<button class="confirm" data-act="confirmDel" data-id="${e.id}">${esc(S('confirmDelete'))}</button>`
     : `<button class="ibtn" data-act="arm" data-id="${e.id}" title="删除"><span class="ms">delete</span></button>`;
-  return `<article class="ecard ${e.id === sel ? 'sel' : ''}" data-sel="${e.id}" data-card="${e.id}">${imgs}
+  const t = tripById(e.trip), names = t ? companionNames(t) : [];
+  const meta = ctx
+    ? `<div class="l1"><span class="ms">${TYPES[e.type][1]}</span><span>${TYPES[e.type][0]}</span><span class="ms" style="margin-left:4px">place</span><span class="pn">${esc(e.place)}</span></div>
+       <div class="sm">${esc(fmtDateTime(e.ts))} · ${esc(t?.title ?? '')}</div>${names.length ? `<div class="sm" style="margin-top:0">与 ${esc(names.join('、'))}</div>` : ''}`
+    : `<div class="l1"><span class="ms">place</span><span class="pn">${esc(e.place)}</span></div>`;
+  return `<article class="ecard ${!ctx && e.id === sel ? 'sel' : ''}" ${ctx ? 'style="cursor:default"' : `data-sel="${e.id}" data-card="${e.id}"`}>${imgs}
     <div class="rw"><div class="col">
       ${e.title ? `<div class="ti">${esc(e.title)}</div>` : ''}
       ${e.body ? `<div class="bo">${esc(e.body)}</div>` : ''}
-      ${!e.title && !e.body ? `<div class="ti">记录</div>` : ''}
-      <div class="meta"><div class="l1"><span class="ms">place</span><span class="pn">${esc(e.place)}</span></div></div>
+      ${!e.title && !e.body ? `<div class="ti">${ctx ? TYPES[e.type][0] : '记录'}</div>` : ''}
+      <div class="meta">${meta}</div>
     </div>
     <button class="ibtn" data-act="toast" data-msg="编辑会在卡片内展开记录表单（本原型不包含）" title="编辑"><span class="ms">edit</span></button>${del}</div></article>`;
 }
@@ -564,7 +700,7 @@ function bandHtml(bandHeight, lastDay) {
   // grey arc spans each day from 0h to 24h with the day number at its centre,
   // and each record's dot sits at its clock time.
   const PAD = 44, dayLen = 24 * P.pxPerHour;
-  const totalDays = dayIndex(TRIP.end);
+  const totalDays = dayIndex(tripEnd(trip()));
   const X = (d, h = 0) => PAD + (d - 1) * dayLen + h * P.pxPerHour;
   const RAIL_Y = 26 + P.axisDrop; // centre line of the rail within the track
   let html = '';
@@ -587,7 +723,7 @@ function bandHtml(bandHeight, lastDay) {
   html += tick(X(totalDays + 1), true);
   html = `<svg class="arcs" width="${X(totalDays + 1) + PAD}" height="${arcBottom + 4}" aria-hidden="true">${arcs}</svg>` + html;
   const items = [];
-  const sorted = [...entries].sort((a, b) => a.ts - b.ts);
+  const sorted = [...tripEntries()].sort((a, b) => a.ts - b.ts);
   for (const e of sorted) items.push({ x: X(dayIndex(e.ts), e.ts.getHours() + e.ts.getMinutes() / 60), e });
   items.sort((a, b) => a.x - b.x);
   for (const it of items) {
@@ -600,10 +736,131 @@ function bandHtml(bandHeight, lastDay) {
   }
   const cells = `<div class="track" style="width:${X(totalDays + 1) + PAD}px">${html}</div>`;
   return `<section id="band" class="card-float" style="left:${P.margin}px;right:${P.margin}px;bottom:${P.margin}px;height:${bandHeight}px">
-    <div class="bh">${P.t_bandShowTitle ? `<span class="ms ic" style="color:${acc}">timeline</span><span class="ti">${esc(S('bandTitle', { trip: TRIP.title }))}</span>
-      <span class="n">${esc(S('bandCount', { n: entries.length }))}</span>` : ''}<span class="sp"></span>
+    <div class="bh">${P.t_bandShowTitle ? `<span class="ms ic" style="color:${acc}">timeline</span><span class="ti">${esc(S('bandTitle', { trip: trip().title }))}</span>
+      <span class="n">${esc(S('bandCount', { n: tripEntries().length }))}</span>` : ''}<span class="sp"></span>
       <button class="ibtn cmp" data-act="closeTrip" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
-    ${expanded ? `${entries.length ? `<div id="brow">${cells}</div>` : `<div class="empty">${esc(S('bandEmpty'))}</div>`}` : ''}</section>`;
+    ${expanded ? `${tripEntries().length ? `<div id="brow">${cells}</div>` : `<div class="empty">${esc(S('bandEmpty'))}</div>`}` : ''}</section>`;
+}
+
+/* ======================= 旅途 / 浏览 section panel ======================= */
+function navHtml() {
+  // ~450 wide, but never so wide it crowds a small window (home_shell.dart).
+  const w = Math.min(P.navPanelWidth, W - 40), m = P.navInset;
+  const body = nav === 'trips' ? tripsHtml(w) : browseHtml();
+  return `<section id="nav" class="card-float" style="top:${m}px;right:${m}px;bottom:${m}px;width:${w}px">
+    <div class="nh"><span class="ti">${esc(S(nav === 'trips' ? 'navTrips' : 'navBrowse'))}</span>
+      <button class="ibtn cmp" data-act="navClose" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
+    <div class="hair"></div><div class="nb">${body}</div></section>`;
+}
+function tripsHtml(w) {
+  if (!trips.length) return `<div class="cempty"><div><span class="ms" style="font-size:56px;color:var(--hint)">luggage</span>
+    <div style="font-size:16px;font-weight:500;margin:16px 0 6px">还没有旅途</div><div style="font-size:12px;color:var(--hint)">每条记录都要归属于一趟旅途，<br>先创建一趟再开始记录吧。</div>
+    <button class="segb" data-act="newTrip" style="margin:20px auto 0;background:var(--primary);color:var(--on-primary);border:0;padding:0 24px 0 16px;align-items:center;gap:8px;font-weight:500"><span class="ms" style="font-size:18px">add</span>${esc(S('newTrip'))}</button></div></div>`;
+  let list = `<button class="newtrip" data-act="newTrip"><span class="ms">add</span>${esc(S('newTrip'))}</button>`;
+  for (const t of [...trips].sort((a, b) => b.start - a.start)) {
+    const names = companionNames(t);
+    list += `<div class="tcard" data-act="openTrip" data-id="${t.id}"><div class="col">
+      <div class="tt">${esc(t.title)}</div>
+      <div class="mt"><span class="mchip"><span class="ms">event</span><span>${esc(tripDates(t))}</span></span>
+        <span class="mchip"><span class="ms">notes</span><span>${esc(S('tripCount', { n: tripEntries(t.id).length }))}</span></span></div>
+      ${names.length ? `<div class="wi"><span class="ms">group</span><span>${esc(names.join('、'))}</span></div>` : ''}</div>
+      <button class="ibtn" data-act="tripMenu" data-id="${t.id}" title="更多"><span class="ms">more_vert</span></button></div>`;
+  }
+  // TripsScreen decides two-pane by the *window* width, so inside the desktop
+  // panel it still lays out a 360 list beside a narrow "pick a trip" column.
+  if (!P.t_tripsPickPrompt) return `<div id="navList" class="scrollv tlist">${list}</div>`;
+  const lw = Math.min(P.tripListW, w);
+  return `<div class="trows"><div id="navList" class="scrollv tlist" style="flex:none;width:${lw}px">${list}</div><div class="vdiv"></div>
+    <div class="pickp"><span class="ms">touch_app</span><span>${esc(S('pickPrompt'))}</span></div></div>`;
+}
+function browseHtml() {
+  let h = `<div class="segw"><div class="segb" role="group">
+    <button data-act="mode" data-mode="type" aria-pressed="${browseMode === 'type'}"><span class="ms">category</span>${esc(S('segType'))}</button>
+    <button data-act="mode" data-mode="companion" aria-pressed="${browseMode === 'companion'}"><span class="ms">group</span>${esc(S('segCompanion'))}</button></div></div><div class="div1"></div>`;
+  const newest = list => [...list].sort((a, b) => b.ts - a.ts);
+  if (browseMode === 'type') {
+    h += `<div class="chips">${Object.entries(TYPES).map(([k, [label, icon]]) => `<button class="chip" data-act="typeChip" data-type="${k}" aria-pressed="${typeFilter.has(k)}"><span class="ms">${typeFilter.has(k) ? 'check' : icon}</span>${label}</button>`).join('')}</div><div class="div1"></div>`;
+    const list = newest(entries.filter(e => !typeFilter.size || typeFilter.has(e.type)));
+    h += list.length ? `<div id="navList" class="scrollv">${list.map(e => cardHtml(e, true)).join('')}</div>` : `<div class="cempty">${esc(S('typeEmpty'))}</div>`;
+    return h;
+  }
+  if (!people.length) return h + `<div class="cempty"><div><span class="ms" style="font-size:56px;color:var(--hint)">group</span>
+    <div style="font-size:16px;font-weight:500;margin:16px 0 6px">还没有同行人</div><div style="font-size:12px;color:var(--hint)">添加同行人后，可以按人筛选一起去过的地方。</div>
+    <button class="segb" data-act="addPerson" style="margin:20px auto 0;background:var(--primary);color:var(--on-primary);border:0;padding:0 24px 0 16px;align-items:center;gap:8px;font-weight:500"><span class="ms" style="font-size:18px">person_add</span>添加同行人</button></div></div>`;
+  if (compSel && !people.some(p => p.id === compSel)) compSel = null;
+  h += `<div class="chips">${people.map(p => `<button class="chip" data-act="personChip" data-id="${p.id}" aria-pressed="${compSel === p.id}">${compSel === p.id ? '<span class="ms">check</span>' : `<span class="av">${esc([...p.name][0])}</span>`}${esc(p.name)}</button>`).join('')}
+    <button class="chip" data-act="addPerson"><span class="ms">add</span>${esc(S('addPerson'))}</button></div><div class="div1"></div>`;
+  const pc = people.find(p => p.id === compSel);
+  if (!pc) return h + `<div class="cempty">${esc(S('companionPrompt'))}</div>`;
+  // Places visited together: every record of every trip that lists this person.
+  const list = newest(entries.filter(e => tripById(e.trip)?.companions.includes(pc.id)));
+  h += `<div class="chead"><span class="ti">${esc(S('companionHeader', { name: pc.name, n: list.length }))}</span>
+    <button class="ibtn" data-act="renamePerson" title="重命名"><span class="ms">drive_file_rename_outline</span></button>
+    <button class="ibtn" data-act="deletePerson" title="删除"><span class="ms">delete</span></button></div>`;
+  h += list.length ? `<div id="navList" class="scrollv">${list.map(e => cardHtml(e, true)).join('')}</div>` : `<div class="cempty">${esc(S('companionEmpty'))}</div>`;
+  return h;
+}
+function menuHtml() {
+  return `<div class="scrim" data-act="menuDismiss"></div><div class="menu" style="right:${menu.right}px;top:${menu.top}px">
+    <button data-act="menuRename"><span class="ms">drive_file_rename_outline</span>重命名</button>
+    <button data-act="menuEdit"><span class="ms">edit</span>编辑人和时间</button>
+    <button data-act="menuDelete"><span class="ms">delete</span>删除</button></div>`;
+}
+function dialogHtml() {
+  const d = dialog, t = d.trip && tripById(d.trip), p = d.person && people.find(x => x.id === d.person);
+  const field = (hint, v = '') => `<input data-dlg-input placeholder="${hint}" value="${esc(v)}">`;
+  const acts = (ok, err) => `<div class="acts"><button data-act="dlgCancel">取消</button><button class="fill${err ? ' err' : ''}" data-act="dlgOk">${ok}</button></div>`;
+  let inner = '';
+  if (d.kind === 'renameTrip') inner = `<h2>重命名旅途</h2>${field('旅途名称', t.title)}${acts('保存')}`;
+  else if (d.kind === 'deleteTrip') {
+    const n = tripEntries(t.id).length;
+    inner = `<h2>删除旅途</h2><p>${esc(n ? `「${t.title}」下的 ${n} 条记录也会一并删除，确定吗？` : `确定删除「${t.title}」吗？`)}</p>${acts('删除', true)}`;
+  } else if (d.kind === 'addPerson') inner = `<h2>添加同行人</h2>${field('姓名')}${acts('确定')}`;
+  else if (d.kind === 'renamePerson') inner = `<h2>重命名</h2>${field('姓名', p.name)}${acts('确定')}`;
+  else if (d.kind === 'deletePerson') {
+    const n = trips.filter(x => x.companions.includes(p.id)).length;
+    inner = `<h2>删除同行人</h2><p>${esc(n ? `「${p.name}」会从 ${n} 趟旅途的同行人中移除，确定吗？` : `确定删除「${p.name}」吗？`)}</p>${acts('删除', true)}`;
+  }
+  return `<div class="scrim dim" data-act="dlgCancel"><div class="dlg" role="dialog" aria-modal="true" data-stop>${inner}</div></div>`;
+}
+function dialogOk() {
+  const d = dialog, v = overlay.querySelector('[data-dlg-input]')?.value.trim();
+  if (d.kind === 'renameTrip') { const t = tripById(d.trip); if (v) t.title = v; }
+  else if (d.kind === 'deleteTrip') {
+    trips = trips.filter(t => t.id !== d.trip); entries = entries.filter(e => e.trip !== d.trip);
+    if (curTripId === d.trip) { tripOpen = false; sel = null; curTripId = trips[0]?.id; }
+  } else if (d.kind === 'addPerson') {
+    if (v) { const id = 'p' + Date.now(); people.push({ id, name: v }); compSel = id; }
+  } else if (d.kind === 'renamePerson') { const p = people.find(x => x.id === d.person); if (v) p.name = v; }
+  else if (d.kind === 'deletePerson') {
+    people = people.filter(p => p.id !== d.person); trips.forEach(t => t.companions = t.companions.filter(c => c !== d.person));
+  }
+  dialog = null; render();
+}
+function toggleNav(key) {
+  nav = nav === key ? null : key; menu = null;
+  // BrowseScreen's mode and CompanionsView's pick are widget state, so they
+  // reset whenever the panel is rebuilt from scratch.
+  if (!P.t_browseKeepState && nav === 'browse') { browseMode = 'type'; compSel = null; }
+  render();
+}
+/* A trip picked in the 旅途 panel opens on the map (records panel + timeline),
+   fitted into the area the floating panels leave visible. */
+function openTrip(id) {
+  if (P.t_navClosesOnPick) nav = null;
+  curTripId = id; tripOpen = true; sel = null; poppedId = null; closing = false;
+  render();
+  // A freshly opened trip starts at the top of its records and day 1.
+  if ($('#plist')) $('#plist').scrollTop = 0;
+  if ($('#brow')) $('#brow').scrollLeft = 0;
+  const pts = tripEntries().map(e => proj(e.lat, e.lng));
+  if (pts.length) {
+    const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const bandHeight = expanded ? P.bandH : P.bandCollapsedH;
+    cam = [(W - P.panelWidth - P.margin * 2) / 2 - cx, (H - bandHeight - P.margin - P.gap) / 2 - cy];
+    world.style.transform = `translate(${cam[0]}px, ${cam[1]}px)`;
+  }
 }
 
 /* ======================= interactions ======================= */
@@ -688,12 +945,35 @@ app.addEventListener('mouseover', ev => {
 });
 app.addEventListener('click', ev => {
   const a = ev.target.closest('[data-act]');
+  // Clicks inside a dialog only count on its own buttons, not on the scrim behind.
+  if (ev.target.closest('[data-stop]') && !a?.closest('[data-stop]')) return;
   if (a) {
     ev.stopPropagation();
     const act = a.dataset.act;
     if (act === 'desel') select(null);
     else if (act === 'closeTrip') closeTrip();
-    else if (act === 'trips') { if (!tripOpen) { tripOpen = true; render(); } else toast('在真实应用里，这里打开「旅途」列表面板'); }
+    else if (act === 'nav') toggleNav(a.dataset.nav);
+    else if (act === 'navClose') { nav = null; menu = null; render(); }
+    else if (act === 'openTrip') openTrip(a.dataset.id);
+    else if (act === 'newTrip') toast('新建旅途会弹出旅途表单（本原型不包含）');
+    else if (act === 'tripMenu') {
+      // PopupMenuButton: the menu opens over the button, right-aligned to it.
+      const r = a.getBoundingClientRect(), b = app.getBoundingClientRect();
+      menu = { trip: a.dataset.id, right: (b.right - r.right) / appScale, top: (r.top - b.top) / appScale };
+      render();
+    }
+    else if (act === 'menuDismiss') { menu = null; render(); }
+    else if (act === 'menuRename') { dialog = { kind: 'renameTrip', trip: menu.trip }; menu = null; render(); }
+    else if (act === 'menuEdit') { menu = null; render(); toast('编辑人和时间会弹出旅途表单（本原型不包含）'); }
+    else if (act === 'menuDelete') { dialog = { kind: 'deleteTrip', trip: menu.trip }; menu = null; render(); }
+    else if (act === 'dlgCancel') { dialog = null; render(); }
+    else if (act === 'dlgOk') dialogOk();
+    else if (act === 'mode') { browseMode = a.dataset.mode; render(); }
+    else if (act === 'typeChip') { const k = a.dataset.type; typeFilter.has(k) ? typeFilter.delete(k) : typeFilter.add(k); render(); }
+    else if (act === 'personChip') { compSel = compSel === a.dataset.id ? null : a.dataset.id; render(); }
+    else if (act === 'addPerson') { dialog = { kind: 'addPerson' }; render(); }
+    else if (act === 'renamePerson') { dialog = { kind: 'renamePerson', person: compSel }; render(); }
+    else if (act === 'deletePerson') { dialog = { kind: 'deletePerson', person: compSel }; render(); }
     else if (act === 'toggleBand') { expanded = !expanded; render(); }
     else if (act === 'toast') toast(a.dataset.msg);
     else if (act === 'arm') {
@@ -707,7 +987,11 @@ app.addEventListener('click', ev => {
   }
   const s = ev.target.closest('[data-sel]');
   if (s) { select(s.dataset.sel, s.dataset.node ? 'node' : s.dataset.card ? 'card' : 'map'); return; }
-  if (!ev.target.closest('.card-float, .bubble')) select(null);
+  if (!ev.target.closest('.card-float, .bubble, .dlg, .menu')) select(null);
+});
+document.addEventListener('keydown', ev => {
+  if (dialog && ev.key === 'Enter' && ev.target.matches('[data-dlg-input]')) { ev.preventDefault(); dialogOk(); }
+  else if (ev.key === 'Escape' && (dialog || menu)) { dialog = null; menu = null; render(); }
 });
 
 /* ======================= tuning drawer ======================= */
@@ -716,7 +1000,7 @@ function buildDock() {
   PARAMS.forEach(p => (groups[p[7]] ||= []).push(p));
   let h = `<details open><summary>画布尺寸</summary><div class="seg" id="frameSeg">${Object.entries(FRAMES).map(([k, v]) => `<button data-frame="${k}" aria-pressed="${k === frame}">${v}</button>`).join('')}</div></details>`;
   for (const g in groups) {
-    h += `<details ${g === '底部时间线' ? 'open' : ''}><summary>${g}</summary>`;
+    h += `<details ${g === '旅途/浏览浮窗' ? 'open' : ''}><summary>${g}</summary>`;
     groups[g].forEach(([k, label, def, min, max, step, dart]) => {
       h += `<div class="row" data-row="${k}"><label for="n_${k}">${label}</label><input type="number" id="n_${k}" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${P[k]}">
         <input type="range" id="r_${k}" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${P[k]}" aria-label="${label}"><span class="dart">${dart} · 默认 ${def}</span></div>`;
@@ -757,7 +1041,7 @@ $('#dockBody').addEventListener('click', ev => {
     document.querySelectorAll('[data-frame]').forEach(b => b.setAttribute('aria-pressed', b.dataset.frame === frame));
     layoutFrame(); render();
   }
-  if (ev.target.id === 'dataReset') { resetData(); sel = null; tripOpen = true; render(); }
+  if (ev.target.id === 'dataReset') { resetData(); sel = null; tripOpen = true; curTripId = 't1'; compSel = null; dialog = menu = null; render(); }
 });
 $('#resetBtn').addEventListener('click', () => { P = { ...DEF }; save(); buildDock(); render(); });
 $('#copyBtn').addEventListener('click', async () => {
