@@ -248,6 +248,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .chead { display: flex; align-items: center; padding: 12px 8px 8px 16px; flex: none; }
 .chead .ti { flex: 1; font-size: 14px; font-weight: 500; }
 .chead .ibtn .ms { font-size: 20px; }
+/* 浏览 page, row 2: borderless icon filters + a small text toggle */
+.frow { display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 8px; flex: none; }
+.ichips { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.ichip { width: var(--ichipD); height: var(--ichipD); border-radius: 50%; display: grid; place-items: center; color: var(--grey); transition: background .15s, color .15s; }
+.ichip:hover { background: rgba(0,0,0,.05); color: var(--on-surface-variant); }
+.ichip .ms { font-size: var(--ichipIcon); }
+.ichip[aria-pressed=true] { background: var(--secondary-container); color: var(--primary); }
+.ichip .av { width: calc(var(--ichipIcon) + 2px); height: calc(var(--ichipIcon) + 2px); border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 500; background: rgba(0,0,0,.07); color: var(--on-surface-variant); }
+.ichip[aria-pressed=true] .av { background: var(--primary); color: var(--on-primary); }
+.mtog { flex: none; display: flex; padding: 2px; border-radius: 13px; background: rgba(0,0,0,.05); }
+.mtog button { height: 22px; padding: 0 10px; border-radius: 11px; font-size: 12px; color: var(--hint); transition: background .15s, color .15s; }
+.mtog button:hover { color: var(--on-surface); }
+.mtog button[aria-pressed=true] { background: var(--surface); color: var(--on-surface); font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+
 /* popup menu + dialogs */
 .scrim { position: absolute; inset: 0; z-index: 40; }
 .scrim.dim { background: rgba(0,0,0,.32); display: grid; place-items: center; }
@@ -340,6 +354,8 @@ const PARAMS = [
   ['navPanelWidth', '旅途浮窗宽度', 450, 300, 620, 2, 'home_shell.dart · panelWidth 450（窗口窄时为 宽 - 40）', '旅途/浏览浮窗'],
   ['navInset', '浮窗与圆形按钮外边距', 20, 8, 40, 1, 'home_shell.dart · left/top/right/bottom: 20', '旅途/浏览浮窗'],
   ['browseMaxW', '浏览页内容最大宽度', 720, 400, 1600, 10, '新增：浏览全屏页的列表栏宽（居中）', '旅途/浏览浮窗'],
+  ['ichipD', '筛选图标点击区直径', 36, 24, 48, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
+  ['ichipIcon', '筛选图标大小', 20, 14, 28, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
   ['pageInMs', '浏览页进入动画 (ms)', 200, 0, 600, 10, '新增：浏览全屏页淡入上移', '旅途/浏览浮窗'],
   ['navTitleFs', '浮窗 / 页面标题字号', 16, 12, 22, 0.5, '_SidePanel · titleMedium bold', '旅途/浏览浮窗'],
   ['bubbleD', '圆形按钮直径', 56, 36, 72, 1, '_Bubble · d 56（退出 44）', '旅途/浏览浮窗'],
@@ -368,10 +384,10 @@ const STRINGS = [
   ['navBrowse', '浏览页标题 / 按钮提示', '浏览', ''],
   ['newTrip', '新建旅途行', '新建旅途', ''],
   ['tripCount', '旅途卡片记录数', '{n} 条记录', '{n}'],
-  ['segType', '浏览分段：类型', '按类型', ''],
-  ['segCompanion', '浏览分段：同行人', '按同行人', ''],
+  ['segType', '浏览切换：类型', '类型', ''],
+  ['segCompanion', '浏览切换：同行人', '同行人', ''],
   ['typeEmpty', '按类型空状态', '没有符合条件的记录', ''],
-  ['addPerson', '添加同行人 chip', '添加', ''],
+  ['addPerson', '添加同行人（图标提示）', '添加同行人', ''],
   ['companionPrompt', '未选同行人提示', '选择一位同行人，查看一起去过的地方', ''],
   ['companionHeader', '同行人标题', '与 {name} · {n} 处', '{name} {n}'],
   ['companionEmpty', '同行人无记录', '还没有和 TA 一起的记录', ''],
@@ -588,6 +604,8 @@ function render() {
     .forEach(k => r.setProperty('--' + k, P[k] + 'px'));
   ['navTitleFs', 'tripCardTitleFs'].forEach(k => r.setProperty('--' + k, P[k] + 'px'));
   r.setProperty('--browseMaxW', P.browseMaxW + 'px');
+  r.setProperty('--ichipD', P.ichipD + 'px');
+  r.setProperty('--ichipIcon', P.ichipIcon + 'px');
   r.setProperty('--pageInMs', P.pageInMs + 'ms');
   r.setProperty('--cardBodyLines', P.cardBodyLines);
   r.setProperty('--dotHoverScale', P.dotHoverScale);
@@ -781,22 +799,26 @@ function tripsHtml() {
   return `<div id="navList" class="scrollv tlist">${list}</div>`;
 }
 function browseHtml() {
-  let h = `<div class="segw"><div class="segb" role="group">
-    <button data-act="mode" data-mode="type" aria-pressed="${browseMode === 'type'}"><span class="ms">category</span>${esc(S('segType'))}</button>
-    <button data-act="mode" data-mode="companion" aria-pressed="${browseMode === 'companion'}"><span class="ms">group</span>${esc(S('segCompanion'))}</button></div></div><div class="div1"></div>`;
+  // Row 2: the filter icons on the left, the small mode toggle on the right.
+  const tog = `<div class="mtog" role="group" aria-label="浏览方式">
+    <button data-act="mode" data-mode="type" aria-pressed="${browseMode === 'type'}">${esc(S('segType'))}</button>
+    <button data-act="mode" data-mode="companion" aria-pressed="${browseMode === 'companion'}">${esc(S('segCompanion'))}</button></div>`;
+  const row = icons => `<div class="frow"><div class="ichips">${icons}</div>${tog}</div><div class="hair"></div>`;
+  let h = '';
   const newest = list => [...list].sort((a, b) => b.ts - a.ts);
   if (browseMode === 'type') {
-    h += `<div class="chips">${Object.entries(TYPES).map(([k, [label, icon]]) => `<button class="chip" data-act="typeChip" data-type="${k}" aria-pressed="${typeFilter.has(k)}"><span class="ms">${typeFilter.has(k) ? 'check' : icon}</span>${label}</button>`).join('')}</div><div class="div1"></div>`;
+    h += row(Object.entries(TYPES).map(([k, [label, icon]]) => `<button class="ichip" data-act="typeChip" data-type="${k}" aria-pressed="${typeFilter.has(k)}" title="${label}" aria-label="${label}"><span class="ms">${icon}</span></button>`).join(''));
     const list = newest(entries.filter(e => !typeFilter.size || typeFilter.has(e.type)));
     h += list.length ? `<div id="navList" class="scrollv">${list.map(e => cardHtml(e, true)).join('')}</div>` : `<div class="cempty">${esc(S('typeEmpty'))}</div>`;
     return h;
   }
-  if (!people.length) return h + `<div class="cempty"><div><span class="ms" style="font-size:56px;color:var(--hint)">group</span>
+  if (!people.length) return row('') + `<div class="cempty"><div><span class="ms" style="font-size:56px;color:var(--hint)">group</span>
     <div style="font-size:16px;font-weight:500;margin:16px 0 6px">还没有同行人</div><div style="font-size:12px;color:var(--hint)">添加同行人后，可以按人筛选一起去过的地方。</div>
     <button class="segb" data-act="addPerson" style="margin:20px auto 0;background:var(--primary);color:var(--on-primary);border:0;padding:0 24px 0 16px;align-items:center;gap:8px;font-weight:500"><span class="ms" style="font-size:18px">person_add</span>添加同行人</button></div></div>`;
   if (compSel && !people.some(p => p.id === compSel)) compSel = null;
-  h += `<div class="chips">${people.map(p => `<button class="chip" data-act="personChip" data-id="${p.id}" aria-pressed="${compSel === p.id}">${compSel === p.id ? '<span class="ms">check</span>' : `<span class="av">${esc([...p.name][0])}</span>`}${esc(p.name)}</button>`).join('')}
-    <button class="chip" data-act="addPerson"><span class="ms">add</span>${esc(S('addPerson'))}</button></div><div class="div1"></div>`;
+  // A companion is just their initial in a small disc; the name is in the tooltip.
+  h += row(people.map(p => `<button class="ichip" data-act="personChip" data-id="${p.id}" aria-pressed="${compSel === p.id}" title="${esc(p.name)}" aria-label="${esc(p.name)}"><span class="av">${esc([...p.name][0])}</span></button>`).join('')
+    + `<button class="ichip" data-act="addPerson" title="${esc(S('addPerson'))}" aria-label="${esc(S('addPerson'))}"><span class="ms">person_add</span></button>`);
   const pc = people.find(p => p.id === compSel);
   if (!pc) return h + `<div class="cempty">${esc(S('companionPrompt'))}</div>`;
   // Places visited together: every record of every trip that lists this person.
