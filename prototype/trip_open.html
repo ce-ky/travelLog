@@ -206,15 +206,19 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 /* ---- 旅途 / 浏览 floating section panel (HomeShell._SidePanel) ---- */
 #nav { z-index: 6; }
+#nav.page { position: absolute; inset: 0; z-index: 25; background: var(--surface); display: flex; flex-direction: column; }
+#nav.page.enter { animation: pageIn var(--pageInMs) cubic-bezier(.2,.8,.2,1) both; }
+@keyframes pageIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+#nav.page .nh { padding: 14px 16px 14px 24px; }
+/* The page's content column: full height, centred, capped in width. */
+#nav .pcol { width: 100%; max-width: var(--browseMaxW); margin: 0 auto; }
 #nav .nh { display: flex; align-items: center; padding: 10px 6px 10px 16px; flex: none; }
 #nav .nh .ti { flex: 1; font-size: var(--navTitleFs); font-weight: 700; }
 #nav .nb { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .scrollv { flex: 1; min-height: 0; overflow-y: auto; }
 .div1 { height: 1px; background: var(--outline-variant); flex: none; }
-.vdiv { width: 1px; background: var(--outline-variant); flex: none; }
 .cempty { flex: 1; display: grid; place-items: center; color: var(--on-surface); text-align: center; padding: 0 16px; font-size: 14px; }
 /* trips */
-.trows { display: flex; flex: 1; min-height: 0; }
 .tlist { padding: 8px 0; }
 .newtrip { margin: 6px 12px; border-radius: 12px; border: 1px solid rgba(43,106,91,.4); background: rgba(43,106,91,.04); color: var(--primary); font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 15px 0; width: calc(100% - 24px); }
 .newtrip:hover { background: rgba(43,106,91,.1); }
@@ -227,8 +231,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .mchip span:last-child, .tcard .wi span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mchip .ms, .tcard .wi .ms { font-size: 14px; }
 .tcard .wi { margin-top: 4px; }
-.pickp { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--hint); text-align: center; overflow: hidden; }
-.pickp .ms { font-size: 44px; }
 /* browse */
 .segw { display: flex; justify-content: center; padding: 8px 12px 4px; flex: none; }
 .segb { display: flex; border: 1px solid #6f7975; border-radius: 20px; overflow: hidden; height: 40px; }
@@ -335,12 +337,13 @@ const PARAMS = [
   ['cardBodyLines', '正文最多行数', 4, 1, 8, 1, 'EntryCard · maxLines: 4', '右侧记录栏'],
   ['cardImgH', '单图高度', 168, 80, 240, 4, '_ImageStrip · height: 168', '右侧记录栏'],
   ['cardMultiImgH', '多图高度', 92, 56, 160, 2, '_ImageStrip · height: 92', '右侧记录栏'],
-  ['navPanelWidth', '浮窗宽度', 450, 300, 620, 2, 'home_shell.dart · panelWidth 450（窗口窄时为 宽 - 40）', '旅途/浏览浮窗'],
+  ['navPanelWidth', '旅途浮窗宽度', 450, 300, 620, 2, 'home_shell.dart · panelWidth 450（窗口窄时为 宽 - 40）', '旅途/浏览浮窗'],
   ['navInset', '浮窗与圆形按钮外边距', 20, 8, 40, 1, 'home_shell.dart · left/top/right/bottom: 20', '旅途/浏览浮窗'],
-  ['navTitleFs', '浮窗标题字号', 16, 12, 22, 0.5, '_SidePanel · titleMedium bold', '旅途/浏览浮窗'],
+  ['browseMaxW', '浏览页内容最大宽度', 720, 400, 1600, 10, '新增：浏览全屏页的列表栏宽（居中）', '旅途/浏览浮窗'],
+  ['pageInMs', '浏览页进入动画 (ms)', 200, 0, 600, 10, '新增：浏览全屏页淡入上移', '旅途/浏览浮窗'],
+  ['navTitleFs', '浮窗 / 页面标题字号', 16, 12, 22, 0.5, '_SidePanel · titleMedium bold', '旅途/浏览浮窗'],
   ['bubbleD', '圆形按钮直径', 56, 36, 72, 1, '_Bubble · d 56（退出 44）', '旅途/浏览浮窗'],
   ['bubbleGap', '圆形按钮间距', 14, 4, 32, 1, 'home_shell.dart · SizedBox(height: 14)', '旅途/浏览浮窗'],
-  ['tripListW', '旅途列表宽度', 360, 200, 520, 4, 'trips_screen.dart · SizedBox(width: 360)', '旅途/浏览浮窗'],
   ['tripCardTitleFs', '旅途卡片标题字号', 16, 12, 22, 0.5, '_TripCard · titleMedium', '旅途/浏览浮窗'],
   ['tripHue', '京都之旅色相 (H)', 108, 0, 359, 1, '_tripColor · hue 由 trip.id 哈希决定', '颜色'],
   ['dayLightStart', '第1天亮度 (L)', 0.43, 0.3, 0.9, 0.01, '_tripDayColor · 0.70', '颜色'],
@@ -362,10 +365,9 @@ const STRINGS = [
   ['confirmDelete', '删除二次确认', '是否确认？', ''],
   ['close', '关闭按钮提示', '关闭', ''],
   ['navTrips', '旅途浮窗标题 / 按钮提示', '旅途', ''],
-  ['navBrowse', '浏览浮窗标题 / 按钮提示', '浏览', ''],
+  ['navBrowse', '浏览页标题 / 按钮提示', '浏览', ''],
   ['newTrip', '新建旅途行', '新建旅途', ''],
   ['tripCount', '旅途卡片记录数', '{n} 条记录', '{n}'],
-  ['pickPrompt', '旅途列表右侧提示', '点击左侧的旅途，查看它的全部记录', ''],
   ['segType', '浏览分段：类型', '按类型', ''],
   ['segCompanion', '浏览分段：同行人', '按同行人', ''],
   ['typeEmpty', '按类型空状态', '没有符合条件的记录', ''],
@@ -381,8 +383,7 @@ const TOGGLES = [
   ['hourTicks', '显示 6 / 12 / 18 点标注', true, '每小时一个刻度；只有 6 / 12 / 18 点带数字'],
   ['bandFollow', '时间线跟随选中滚动', true, '现状：开启（Scrollable.ensureVisible alignment 0.5）'],
   ['navClosesOnPick', '在旅途浮窗选中旅途后关闭浮窗', true, '现状：点一趟旅途 → 浮窗关闭，地图打开该旅途的右侧记录栏和时间线'],
-  ['tripsPickPrompt', '旅途浮窗保留右侧提示栏', true, '现状：窗口宽 ≥720 时 TripsScreen 仍按两栏排，列表 360 宽，右边剩一条窄提示栏'],
-  ['browseKeepState', '浏览浮窗记住模式与同行人', false, '现状：关闭后状态随面板销毁，再打开回到「按类型」、同行人未选；类型筛选存在 AppState 里会保留'],
+  ['browseKeepState', '浏览页记住模式与同行人', false, '现状：关闭后状态随面板销毁，再打开回到「按类型」、同行人未选；类型筛选存在 AppState 里会保留'],
 ];
 
 const DEF = {};
@@ -489,6 +490,7 @@ function photoBg(e, i = 0) {
 let tripOpen = true, expanded = true, sel = null, armed = null, armTimer = null;
 let frame = 'fit';
 // HomeShell's floating section panel: null | 'trips' | 'browse'.
+let pageEnter = false; // play the 浏览 page's entry only on the render that opens it
 let nav = null, browseMode = 'type', compSel = null, menu = null, dialog = null;
 const typeFilter = new Set(); // lives in AppState, so it outlives the panel
 const FRAMES = { fit: '适应窗口', '1280x800': '1280×800', '1440x900': '1440×900', '1920x1080': '1920×1080', '1024x700': '1024×700' };
@@ -585,6 +587,8 @@ function render() {
   ['radius', 'panelTitleFs', 'panelSubFs', 'dayHeaderFs', 'cardTitleFs', 'cardBodyFs', 'nodeTitleFs', 'timeFs', 'dayArcFs', 'railW', 'bandCollapsedH']
     .forEach(k => r.setProperty('--' + k, P[k] + 'px'));
   ['navTitleFs', 'tripCardTitleFs'].forEach(k => r.setProperty('--' + k, P[k] + 'px'));
+  r.setProperty('--browseMaxW', P.browseMaxW + 'px');
+  r.setProperty('--pageInMs', P.pageInMs + 'ms');
   r.setProperty('--cardBodyLines', P.cardBodyLines);
   r.setProperty('--dotHoverScale', P.dotHoverScale);
   r.setProperty('--mapDotHoverScale', P.mapDotHoverScale);
@@ -641,7 +645,7 @@ function render() {
   if (dialog) h += dialogHtml();
   overlay.innerHTML = h;
   if (navScroll != null && $('#navList')) $('#navList').scrollTop = navScroll;
-  if (dialog) { const i = overlay.querySelector('.dlg input'); if (i) { i.focus(); i.select(); } else overlay.querySelector('.dlg .fill')?.focus(); }
+  if (dialog) { const i = overlay.querySelector('.dlg input'); if (i) { i.focus({ preventScroll: true }); i.select(); } else overlay.querySelector('.dlg .fill')?.focus({ preventScroll: true }); }
 
   if (bodyScroll != null && $('#plist')) $('#plist').scrollTop = bodyScroll;
   if (bandScroll != null && $('#brow')) $('#brow').scrollLeft = bandScroll;
@@ -744,15 +748,21 @@ function bandHtml(bandHeight, lastDay) {
 
 /* ======================= 旅途 / 浏览 section panel ======================= */
 function navHtml() {
+  // 浏览 is a full page over the whole window (map and bubbles included), its
+  // list in a centred column; 旅途 stays a floating right-side panel.
+  if (nav === 'browse') return `<section id="nav" class="page${pageEnter ? ' enter' : ''}">
+    <div class="nh"><span class="ti">${esc(S('navBrowse'))}</span>
+      <button class="ibtn cmp" data-act="navClose" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
+    <div class="hair"></div><div class="nb pcol">${browseHtml()}</div></section>`;
   // ~450 wide, but never so wide it crowds a small window (home_shell.dart).
   const w = Math.min(P.navPanelWidth, W - 40), m = P.navInset;
-  const body = nav === 'trips' ? tripsHtml(w) : browseHtml();
+  const body = tripsHtml();
   return `<section id="nav" class="card-float" style="top:${m}px;right:${m}px;bottom:${m}px;width:${w}px">
     <div class="nh"><span class="ti">${esc(S(nav === 'trips' ? 'navTrips' : 'navBrowse'))}</span>
       <button class="ibtn cmp" data-act="navClose" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
     <div class="hair"></div><div class="nb">${body}</div></section>`;
 }
-function tripsHtml(w) {
+function tripsHtml() {
   if (!trips.length) return `<div class="cempty"><div><span class="ms" style="font-size:56px;color:var(--hint)">luggage</span>
     <div style="font-size:16px;font-weight:500;margin:16px 0 6px">还没有旅途</div><div style="font-size:12px;color:var(--hint)">每条记录都要归属于一趟旅途，<br>先创建一趟再开始记录吧。</div>
     <button class="segb" data-act="newTrip" style="margin:20px auto 0;background:var(--primary);color:var(--on-primary);border:0;padding:0 24px 0 16px;align-items:center;gap:8px;font-weight:500"><span class="ms" style="font-size:18px">add</span>${esc(S('newTrip'))}</button></div></div>`;
@@ -766,12 +776,9 @@ function tripsHtml(w) {
       ${names.length ? `<div class="wi"><span class="ms">group</span><span>${esc(names.join('、'))}</span></div>` : ''}</div>
       <button class="ibtn" data-act="tripMenu" data-id="${t.id}" title="更多"><span class="ms">more_vert</span></button></div>`;
   }
-  // TripsScreen decides two-pane by the *window* width, so inside the desktop
-  // panel it still lays out a 360 list beside a narrow "pick a trip" column.
-  if (!P.t_tripsPickPrompt) return `<div id="navList" class="scrollv tlist">${list}</div>`;
-  const lw = Math.min(P.tripListW, w);
-  return `<div class="trows"><div id="navList" class="scrollv tlist" style="flex:none;width:${lw}px">${list}</div><div class="vdiv"></div>
-    <div class="pickp"><span class="ms">touch_app</span><span>${esc(S('pickPrompt'))}</span></div></div>`;
+  // The list fills the whole panel: no master–detail split, picking a trip
+  // opens it on the map instead.
+  return `<div id="navList" class="scrollv tlist">${list}</div>`;
 }
 function browseHtml() {
   let h = `<div class="segw"><div class="segb" role="group">
@@ -842,7 +849,7 @@ function toggleNav(key) {
   // BrowseScreen's mode and CompanionsView's pick are widget state, so they
   // reset whenever the panel is rebuilt from scratch.
   if (!P.t_browseKeepState && nav === 'browse') { browseMode = 'type'; compSel = null; }
-  render();
+  pageEnter = nav === 'browse'; render(); pageEnter = false;
 }
 /* A trip picked in the 旅途 panel opens on the map (records panel + timeline),
    fitted into the area the floating panels leave visible. */
@@ -987,7 +994,7 @@ app.addEventListener('click', ev => {
   }
   const s = ev.target.closest('[data-sel]');
   if (s) { select(s.dataset.sel, s.dataset.node ? 'node' : s.dataset.card ? 'card' : 'map'); return; }
-  if (!ev.target.closest('.card-float, .bubble, .dlg, .menu')) select(null);
+  if (!ev.target.closest('.card-float, .page, .bubble, .dlg, .menu')) select(null);
 });
 document.addEventListener('keydown', ev => {
   if (dialog && ev.key === 'Enter' && ev.target.matches('[data-dlg-input]')) { ev.preventDefault(); dialogOk(); }
