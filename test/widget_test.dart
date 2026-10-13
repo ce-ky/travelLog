@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import 'package:travel_log/data/mock_travel_repository.dart';
 import 'package:travel_log/main.dart';
+import 'package:travel_log/screens/browse_screen.dart';
 import 'package:travel_log/screens/new_entry_sheet.dart';
 import 'package:travel_log/state/app_state.dart';
 import 'package:travel_log/widgets/trip_records_panel.dart';
@@ -74,9 +75,16 @@ void main() {
 
     await tester.tap(find.text('浏览'));
     await tester.pumpAndSettle();
-    // The browse tab offers both filter modes.
-    expect(find.text('按类型'), findsOneWidget);
-    expect(find.text('按同行人'), findsOneWidget);
+    // The browse tab offers both filter modes, as a small toggle.
+    expect(find.text('类型'), findsOneWidget);
+    expect(find.text('同行人'), findsOneWidget);
+
+    // Type filters are bare icons, named only in their tooltips: picking 随笔
+    // keeps the essay and drops the photo.
+    await tester.tap(find.byTooltip('随笔'));
+    await tester.pumpAndSettle();
+    expect(find.text('关于旅行的意义'), findsOneWidget);
+    expect(find.text('鸭川边的午后'), findsNothing);
   });
 
   testWidgets('creates a trip and it appears as a card', (tester) async {
@@ -370,15 +378,49 @@ void main() {
 
     await tester.tap(find.text('浏览'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('按同行人'));
+    await tester.tap(find.text('同行人'));
     await tester.pumpAndSettle();
 
-    // 妈妈 was on 云南漫游 only → its records appear, 京都之旅's don't.
-    await tester.tap(find.widgetWithText(ChoiceChip, '妈妈'));
+    // 妈妈 was on 云南漫游 only → its records appear, 京都之旅's don't. Each
+    // person is just an initial; the name is in the tooltip.
+    await tester.tap(find.byTooltip('妈妈'));
     await tester.pumpAndSettle();
 
     expect(find.text('在古城迷路的那晚'), findsOneWidget); // 云南漫游 record
     expect(find.text('鸭川边的午后'), findsNothing); // 京都之旅 record
+  });
+
+  testWidgets('desktop: 浏览 is a full page; 旅途 is a panel with no side pane',
+      (tester) async {
+    final view =
+        TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher.implicitView!;
+    view.physicalSize = const Size(1280, 900);
+
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+
+    // 浏览 covers the whole window, its list in a centred 720-wide column.
+    await tester.tap(find.byTooltip('浏览'));
+    await tester.pumpAndSettle();
+    final browse = find.byType(BrowseScreen);
+    expect(browse, findsOneWidget);
+    final rect = tester.getRect(browse);
+    expect(rect.width, 720);
+    expect(rect.center.dx, 640);
+    expect(rect.bottom, 900);
+    // The page's own close button takes it away again.
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    expect(browse, findsNothing);
+
+    // 旅途 is still a floating panel, but just the list — no "pick a trip"
+    // side pane — and a pick opens the trip on the map.
+    await tester.tap(find.byTooltip('旅途'));
+    await tester.pumpAndSettle();
+    expect(find.text('点击左侧的旅途，查看它的全部记录'), findsNothing);
+    await tester.tap(find.text('京都之旅'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TripRecordsPanel), findsOneWidget);
   });
 
   testWidgets('desktop: opening a trip adds its timeline along the bottom',

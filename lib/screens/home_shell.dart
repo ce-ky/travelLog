@@ -13,8 +13,8 @@ import 'trips_screen.dart';
 ///
 ///  - **Phone** keeps the familiar Material app bar + bottom navigation.
 ///  - **Desktop** makes the map the whole window with no chrome; the two other
-///    sections open as floating right-side panels from round bubble buttons over
-///    the map.
+///    sections open from round bubble buttons over the map — 旅途 as a floating
+///    right-side panel, 浏览 as a full page covering the whole window.
 class HomeShell extends StatefulWidget {
   /// Passed through to [MapScreen]; only widget tests set it.
   final TileProvider? mapTileProvider;
@@ -28,14 +28,14 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-/// Which floating section panel is open on desktop.
+/// Which section is open on desktop (旅途 panel or 浏览 page).
 enum _Panel { none, trips, browse }
 
 class _HomeShellState extends State<HomeShell> {
   /// Phone-only: the selected bottom-nav tab.
   int _index = 0;
 
-  /// Desktop-only: the open right-side panel.
+  /// Desktop-only: the open section.
   _Panel _panel = _Panel.none;
 
   static const _titles = ['地图', '旅途', '浏览'];
@@ -112,21 +112,24 @@ class _HomeShellState extends State<HomeShell> {
             ),
           ),
 
-          // The selected section, as a floating right-side panel (~450 wide).
-          if (_panel != _Panel.none)
+          // 旅途: a floating right-side panel (~450 wide) over the map.
+          if (_panel == _Panel.trips)
             Positioned(
               top: 20,
               right: 20,
               bottom: 20,
               width: panelWidth,
               child: _SidePanel(
-                title: _panel == _Panel.trips ? '旅途' : '浏览',
-                onClose: () => setState(() => _panel = _Panel.none),
-                child: _panel == _Panel.trips
-                    ? TripsScreen(onTripSelected: _openTripOnMap)
-                    : const BrowseScreen(),
+                title: '旅途',
+                onClose: _closePanel,
+                child: TripsScreen(onTripSelected: _openTripOnMap),
               ),
             ),
+
+          // 浏览: a full page over the whole window — map and bubbles included
+          // — closed from its own header.
+          if (_panel == _Panel.browse)
+            Positioned.fill(child: _BrowsePage(onClose: _closePanel)),
         ],
       ),
     );
@@ -134,6 +137,8 @@ class _HomeShellState extends State<HomeShell> {
 
   void _togglePanel(_Panel p) =>
       setState(() => _panel = _panel == p ? _Panel.none : p);
+
+  void _closePanel() => setState(() => _panel = _Panel.none);
 
   /// A trip picked in the 旅途 panel: open its records as a floating panel over
   /// the map (record taps then zoom the map), and close the nav panel so the
@@ -254,9 +259,9 @@ class _Bubble extends StatelessWidget {
   }
 }
 
-/// The floating right-hand panel that hosts a section (trips / browse) on
-/// desktop: a rounded card with a title bar, a close button, and the section
-/// widget filling the rest.
+/// The floating right-hand panel that hosts the 旅途 section on desktop: a
+/// rounded card with a title bar, a close button, and the section widget
+/// filling the rest.
 class _SidePanel extends StatelessWidget {
   final String title;
   final Widget child;
@@ -304,6 +309,72 @@ class _SidePanel extends StatelessWidget {
           ),
           Expanded(child: child),
         ],
+      ),
+    );
+  }
+}
+
+/// The desktop 浏览 section: a full page over the whole window with a title bar
+/// and close button, its list in a centred column (at most [_maxContentWidth]
+/// wide) so cards don't stretch across a wide screen. It fades and rises in
+/// once, when opened.
+class _BrowsePage extends StatelessWidget {
+  final VoidCallback onClose;
+
+  const _BrowsePage({required this.onClose});
+
+  static const double _maxContentWidth = 720;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 200),
+      curve: const Cubic(0.2, 0.8, 0.2, 1),
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(offset: Offset(0, 12 * (1 - t)), child: child),
+      ),
+      child: Material(
+        color: theme.colorScheme.surface,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 14, 16, 14),
+              child: Row(
+                children: [
+                  Text('浏览',
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: '关闭',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onClose,
+                  ),
+                ],
+              ),
+            ),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: theme.dividerColor.withValues(alpha: 0.4),
+            ),
+            Expanded(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints:
+                      const BoxConstraints(maxWidth: _maxContentWidth),
+                  child: const SizedBox.expand(child: BrowseScreen()),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
