@@ -255,6 +255,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .ichip[aria-pressed=true] { background: var(--secondary-container); color: var(--primary); }
 .ichip .av { width: calc(var(--ichipIcon) + 2px); height: calc(var(--ichipIcon) + 2px); border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 500; background: rgba(0,0,0,.07); color: var(--on-surface-variant); }
 .ichip[aria-pressed=true] .av { background: var(--primary); color: var(--on-primary); }
+.ichips { align-items: center; }
+/* Companion tags: hover shows a delete badge in the corner; arming it turns the
+   badge into an in-place 确认？ pill. */
+.ptag { position: relative; display: inline-flex; }
+.pdel { position: absolute; top: -3px; right: -3px; width: 16px; height: 16px; border-radius: 50%; background: var(--on-surface-variant); color: #fff; display: grid; place-items: center; opacity: 0; transform: scale(.6); transition: opacity .12s, transform .12s; z-index: 2; }
+.pdel .ms { font-size: 12px; }
+.ptag:hover .pdel, .pdel:focus-visible { opacity: 1; transform: none; }
+.pdel:hover { background: var(--error); }
+.pconfirm { position: absolute; top: -6px; left: calc(100% - 14px); z-index: 3; white-space: nowrap; background: var(--error); color: #fff; font-size: 11px; font-weight: 500; line-height: 1; padding: 4px 7px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.25); animation: tipIn .12s ease-out both; }
+/* A tag (or the add button) turned into an input in place: type, click outside
+   to save, the × inside cancels. */
+.pedit { display: inline-flex; align-items: center; height: 32px; margin: 2px 0; border: 1.5px solid var(--primary); border-radius: 16px; background: var(--surface); padding: 0 2px 0 12px; animation: tipIn .12s ease-out both; }
+.pedit input { width: var(--pEditW); border: 0; outline: none; background: transparent; font: inherit; font-size: 13px; color: var(--on-surface); padding: 0; }
+.pedit input::placeholder { color: var(--hint); }
+.pedit .pclose { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: var(--hint); flex: none; }
+.pedit .pclose:hover { background: rgba(0,0,0,.06); color: var(--on-surface); }
+.pedit .pclose .ms { font-size: 16px; }
 .mtog { flex: none; display: flex; padding: 2px; border-radius: 13px; background: rgba(0,0,0,.05); }
 .mtog button { height: 22px; padding: 0 10px; border-radius: 11px; font-size: 12px; color: var(--hint); transition: background .15s, color .15s; }
 .mtog button:hover { color: var(--on-surface); }
@@ -354,6 +371,8 @@ const PARAMS = [
   ['browseMaxW', '浏览页内容最大宽度', 720, 400, 1600, 10, '新增：浏览全屏页的列表栏宽（居中）', '旅途/浏览浮窗'],
   ['ichipD', '筛选图标点击区直径', 36, 24, 48, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
   ['ichipIcon', '筛选图标大小', 20, 14, 28, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
+  ['pEditW', '同行人输入框宽度', 96, 56, 200, 2, '新增：同行人原地输入框（添加 / 改名）', '旅途/浏览浮窗'],
+  ['pArmMs', '删除确认自动复原 (ms)', 3000, 1000, 8000, 100, '新增：同行人「确认？」几秒不点自动复原', '旅途/浏览浮窗'],
   ['pageInMs', '浏览页进入动画 (ms)', 200, 0, 600, 10, '新增：浏览全屏页淡入上移', '旅途/浏览浮窗'],
   ['navTitleFs', '浮窗 / 页面标题字号', 16, 12, 22, 0.5, '_SidePanel · titleMedium bold', '旅途/浏览浮窗'],
   ['bubbleD', '圆形按钮直径', 56, 36, 72, 1, '_Bubble · d 56（退出 44）', '旅途/浏览浮窗'],
@@ -386,6 +405,10 @@ const STRINGS = [
   ['segCompanion', '浏览切换：同行人', '同行人', ''],
   ['typeEmpty', '按类型空状态', '没有符合条件的记录', ''],
   ['addPerson', '添加同行人（图标提示）', '添加同行人', ''],
+  ['personHint', '同行人输入框占位', '姓名', ''],
+  ['personEditTip', '已选中同行人的提示', '{name} · 再点一次改名', '{name}'],
+  ['personDelete', '同行人删除按钮提示', '删除', ''],
+  ['personConfirm', '同行人删除确认', '确认？', ''],
   ['companionPrompt', '未选同行人提示', '选择一位同行人，查看一起去过的地方', ''],
   ['companionHeader', '同行人标题', '与 {name} · {n} 处', '{name} {n}'],
   ['companionEmpty', '同行人无记录', '还没有和 TA 一起的记录', ''],
@@ -506,6 +529,9 @@ let frame = 'fit';
 // HomeShell's floating section panel: null | 'trips' | 'browse'.
 let pageEnter = false; // play the 浏览 page's entry only on the render that opens it
 let nav = null, browseMode = 'type', compSel = null, menu = null, dialog = null;
+// Companion tag being edited in place: { id: personId | 'new', value, fresh }.
+// pArmed is the tag whose delete badge has turned into 确认？.
+let pedit = null, pArmed = null, pArmTimer = null;
 const typeFilter = new Set(); // lives in AppState, so it outlives the panel
 const FRAMES = { fit: '适应窗口', '1280x800': '1280×800', '1440x900': '1440×900', '1920x1080': '1920×1080', '1024x700': '1024×700' };
 let W = 1280, H = 800;
@@ -596,12 +622,14 @@ function groupDays() {
 /* ======================= overlay (markers, chrome, panels) ======================= */
 function render() {
   hideTip();
+  const peditFocused = document.activeElement?.matches?.('[data-pedit]');
   const navScroll = $('#navList')?.scrollTop, bodyScroll = $('#plist')?.scrollTop, bandScroll = $('#brow')?.scrollLeft;
   const r = document.documentElement.style;
   ['radius', 'panelTitleFs', 'panelSubFs', 'dayHeaderFs', 'cardTitleFs', 'cardBodyFs', 'nodeTitleFs', 'timeFs', 'dayArcFs', 'railW', 'bandCollapsedH']
     .forEach(k => r.setProperty('--' + k, P[k] + 'px'));
   ['navTitleFs', 'tripCardTitleFs'].forEach(k => r.setProperty('--' + k, P[k] + 'px'));
   r.setProperty('--browseMaxW', P.browseMaxW + 'px');
+  r.setProperty('--pEditW', P.pEditW + 'px');
   r.setProperty('--ichipD', P.ichipD + 'px');
   r.setProperty('--ichipIcon', P.ichipIcon + 'px');
   r.setProperty('--pageInMs', P.pageInMs + 'ms');
@@ -661,6 +689,14 @@ function render() {
   if (dialog) h += dialogHtml();
   overlay.innerHTML = h;
   if (navScroll != null && $('#navList')) $('#navList').scrollTop = navScroll;
+  // The inline companion input keeps its focus (and caret) through re-renders;
+  // when it has just opened, it takes focus with its text selected.
+  const pin = overlay.querySelector('[data-pedit]');
+  if (pin && (peditFocused || pedit.fresh)) {
+    pin.focus({ preventScroll: true });
+    if (pedit.fresh) pin.select(); else pin.setSelectionRange(pin.value.length, pin.value.length);
+    pedit.fresh = false;
+  }
   if (dialog) { const i = overlay.querySelector('.dlg input'); if (i) { i.focus({ preventScroll: true }); i.select(); } else overlay.querySelector('.dlg .fill')?.focus({ preventScroll: true }); }
 
   if (bodyScroll != null && $('#plist')) $('#plist').scrollTop = bodyScroll;
@@ -810,23 +846,51 @@ function browseHtml() {
     h += list.length ? `<div id="navList" class="scrollv">${list.map(e => cardHtml(e, true)).join('')}</div>` : `<div class="cempty">${esc(S('typeEmpty'))}</div>`;
     return h;
   }
-  if (!people.length) return row('') + `<div class="cempty"><div><span class="ms" style="font-size:56px;color:var(--hint)">group</span>
+  if (!people.length) return row(pedit?.id === 'new' ? peditHtml() : '') + `<div class="cempty"><div><span class="ms" style="font-size:56px;color:var(--hint)">group</span>
     <div style="font-size:16px;font-weight:500;margin:16px 0 6px">还没有同行人</div><div style="font-size:12px;color:var(--hint)">添加同行人后，可以按人筛选一起去过的地方。</div>
-    <button class="segb" data-act="addPerson" style="margin:20px auto 0;background:var(--primary);color:var(--on-primary);border:0;padding:0 24px 0 16px;align-items:center;gap:8px;font-weight:500"><span class="ms" style="font-size:18px">person_add</span>添加同行人</button></div></div>`;
+    <button class="segb" data-act="pAdd" style="margin:20px auto 0;background:var(--primary);color:var(--on-primary);border:0;padding:0 24px 0 16px;align-items:center;gap:8px;font-weight:500"><span class="ms" style="font-size:18px">person_add</span>添加同行人</button></div></div>`;
   if (compSel && !people.some(p => p.id === compSel)) compSel = null;
-  // A companion is just their initial in a small disc; the name is in the tooltip.
-  h += row(people.map(p => `<button class="ichip" data-act="personChip" data-id="${p.id}" aria-pressed="${compSel === p.id}" title="${esc(p.name)}" aria-label="${esc(p.name)}"><span class="av">${esc([...p.name][0])}</span></button>`).join('')
-    + `<button class="ichip" data-act="addPerson" title="${esc(S('addPerson'))}" aria-label="${esc(S('addPerson'))}"><span class="ms">person_add</span></button>`);
+  // A companion is just their initial in a small disc; the name is in the
+  // tooltip. Clicking picks them; clicking the picked one again renames it in
+  // place; hovering shows a delete badge that confirms in place.
+  h += row(people.map(p => pedit?.id === p.id ? peditHtml() : personTagHtml(p)).join('')
+    + (pedit?.id === 'new' ? peditHtml()
+      : `<button class="ichip" data-act="pAdd" title="${esc(S('addPerson'))}" aria-label="${esc(S('addPerson'))}"><span class="ms">person_add</span></button>`));
   const pc = people.find(p => p.id === compSel);
   if (!pc) return h + `<div class="cempty">${esc(S('companionPrompt'))}</div>`;
   // Places visited together: every record of every trip that lists this person.
   const list = newest(entries.filter(e => tripById(e.trip)?.companions.includes(pc.id)));
-  h += `<div class="chead"><span class="ti">${esc(S('companionHeader', { name: pc.name, n: list.length }))}</span>
-    <button class="ibtn" data-act="renamePerson" title="重命名"><span class="ms">drive_file_rename_outline</span></button>
-    <button class="ibtn" data-act="deletePerson" title="删除"><span class="ms">delete</span></button></div>`;
+  // Rename / delete now live on the tag itself, so the header is just a caption.
+  h += `<div class="chead" style="padding-right:16px"><span class="ti">${esc(S('companionHeader', { name: pc.name, n: list.length }))}</span></div>`;
   h += list.length ? `<div id="navList" class="scrollv">${list.map(e => cardHtml(e, true)).join('')}</div>` : `<div class="cempty">${esc(S('companionEmpty'))}</div>`;
   return h;
 }
+function personTagHtml(p) {
+  const on = compSel === p.id, tip = on ? S('personEditTip', { name: p.name }) : p.name;
+  const del = pArmed === p.id
+    ? `<button class="pconfirm" data-act="pDelConfirm" data-id="${p.id}">${esc(S('personConfirm'))}</button>`
+    : `<button class="pdel" data-act="pDelArm" data-id="${p.id}" title="${esc(S('personDelete'))}" aria-label="${esc(S('personDelete'))} ${esc(p.name)}"><span class="ms">close</span></button>`;
+  return `<span class="ptag"><button class="ichip" data-act="personChip" data-id="${p.id}" aria-pressed="${on}" title="${esc(tip)}" aria-label="${esc(p.name)}"><span class="av">${esc([...p.name][0])}</span></button>${del}</span>`;
+}
+function peditHtml() {
+  return `<span class="pedit"><input data-pedit maxlength="20" placeholder="${esc(S('personHint'))}" value="${esc(pedit.value)}" aria-label="${pedit.id === 'new' ? esc(S('addPerson')) : '同行人姓名'}">
+    <button class="pclose" data-act="pEditCancel" title="取消" aria-label="取消"><span class="ms">close</span></button></span>`;
+}
+function startPedit(id) {
+  disarmPerson();
+  pedit = { id, value: id === 'new' ? '' : people.find(p => p.id === id).name, fresh: true };
+  render();
+}
+/* Save the inline input: a new name adds the companion (and picks them), an
+   edited one renames; an empty or unchanged field just closes. */
+function commitPedit() {
+  if (!pedit) return;
+  const v = pedit.value.trim();
+  if (pedit.id === 'new') { if (v) { const id = 'p' + Date.now(); people.push({ id, name: v }); compSel = id; } }
+  else { const p = people.find(x => x.id === pedit.id); if (p && v) p.name = v; }
+  pedit = null;
+}
+function disarmPerson() { clearTimeout(pArmTimer); pArmed = null; }
 function menuHtml() {
   return `<div class="scrim" data-act="menuDismiss"></div><div class="menu" style="right:${menu.right}px;top:${menu.top}px">
     <button data-act="menuRename"><span class="ms">drive_file_rename_outline</span>重命名</button>
@@ -834,7 +898,7 @@ function menuHtml() {
     <button data-act="menuDelete"><span class="ms">delete</span>删除</button></div>`;
 }
 function dialogHtml() {
-  const d = dialog, t = d.trip && tripById(d.trip), p = d.person && people.find(x => x.id === d.person);
+  const d = dialog, t = d.trip && tripById(d.trip);
   const field = (hint, v = '') => `<input data-dlg-input placeholder="${hint}" value="${esc(v)}">`;
   const acts = (ok, err) => `<div class="acts"><button data-act="dlgCancel">取消</button><button class="fill${err ? ' err' : ''}" data-act="dlgOk">${ok}</button></div>`;
   let inner = '';
@@ -842,11 +906,6 @@ function dialogHtml() {
   else if (d.kind === 'deleteTrip') {
     const n = tripEntries(t.id).length;
     inner = `<h2>删除旅途</h2><p>${esc(n ? `「${t.title}」下的 ${n} 条记录也会一并删除，确定吗？` : `确定删除「${t.title}」吗？`)}</p>${acts('删除', true)}`;
-  } else if (d.kind === 'addPerson') inner = `<h2>添加同行人</h2>${field('姓名')}${acts('确定')}`;
-  else if (d.kind === 'renamePerson') inner = `<h2>重命名</h2>${field('姓名', p.name)}${acts('确定')}`;
-  else if (d.kind === 'deletePerson') {
-    const n = trips.filter(x => x.companions.includes(p.id)).length;
-    inner = `<h2>删除同行人</h2><p>${esc(n ? `「${p.name}」会从 ${n} 趟旅途的同行人中移除，确定吗？` : `确定删除「${p.name}」吗？`)}</p>${acts('删除', true)}`;
   }
   return `<div class="scrim dim" data-act="dlgCancel"><div class="dlg" role="dialog" aria-modal="true" data-stop>${inner}</div></div>`;
 }
@@ -856,11 +915,6 @@ function dialogOk() {
   else if (d.kind === 'deleteTrip') {
     trips = trips.filter(t => t.id !== d.trip); entries = entries.filter(e => e.trip !== d.trip);
     if (curTripId === d.trip) { tripOpen = false; sel = null; curTripId = trips[0]?.id; }
-  } else if (d.kind === 'addPerson') {
-    if (v) { const id = 'p' + Date.now(); people.push({ id, name: v }); compSel = id; }
-  } else if (d.kind === 'renamePerson') { const p = people.find(x => x.id === d.person); if (v) p.name = v; }
-  else if (d.kind === 'deletePerson') {
-    people = people.filter(p => p.id !== d.person); trips.forEach(t => t.companions = t.companions.filter(c => c !== d.person));
   }
   dialog = null; render();
 }
@@ -869,6 +923,7 @@ function toggleNav(key) {
   // BrowseScreen's mode and CompanionsView's pick are widget state, so they
   // reset whenever the panel is rebuilt from scratch.
   if (!P.t_browseKeepState && nav === 'browse') { browseMode = 'type'; compSel = null; }
+  pedit = null; disarmPerson();
   pageEnter = nav === 'browse'; render(); pageEnter = false;
 }
 /* A trip picked in the 旅途 panel opens on the map (records panel + timeline),
@@ -971,6 +1026,9 @@ app.addEventListener('mouseover', ev => {
   if (id && P.t_hoverLink) hoverTimer = setTimeout(() => { centerMap(id); centerPanel(id); }, 90);
 });
 app.addEventListener('click', ev => {
+  // Any click outside the inline companion input saves it, then the click
+  // carries on to whatever it hit (the old node still knows its data-act).
+  if (pedit && !ev.target.closest('.pedit')) { commitPedit(); render(); }
   const a = ev.target.closest('[data-act]');
   // Clicks inside a dialog only count on its own buttons, not on the scrim behind.
   if (ev.target.closest('[data-stop]') && !a?.closest('[data-stop]')) return;
@@ -997,10 +1055,23 @@ app.addEventListener('click', ev => {
     else if (act === 'dlgOk') dialogOk();
     else if (act === 'mode') { browseMode = a.dataset.mode; render(); }
     else if (act === 'typeChip') { const k = a.dataset.type; typeFilter.has(k) ? typeFilter.delete(k) : typeFilter.add(k); render(); }
-    else if (act === 'personChip') { compSel = compSel === a.dataset.id ? null : a.dataset.id; render(); }
-    else if (act === 'addPerson') { dialog = { kind: 'addPerson' }; render(); }
-    else if (act === 'renamePerson') { dialog = { kind: 'renamePerson', person: compSel }; render(); }
-    else if (act === 'deletePerson') { dialog = { kind: 'deletePerson', person: compSel }; render(); }
+    else if (act === 'personChip') {
+      // First click picks the companion; a click on the picked one renames it.
+      if (compSel === a.dataset.id) startPedit(a.dataset.id);
+      else { compSel = a.dataset.id; disarmPerson(); render(); }
+    }
+    else if (act === 'pAdd') startPedit('new');
+    else if (act === 'pEditCancel') { pedit = null; render(); }
+    else if (act === 'pDelArm') {
+      pArmed = a.dataset.id; render(); clearTimeout(pArmTimer);
+      pArmTimer = setTimeout(() => { pArmed = null; render(); }, P.pArmMs);
+    } else if (act === 'pDelConfirm') {
+      // Drops them from every trip's companions; the records themselves stay.
+      const id = a.dataset.id; disarmPerson();
+      people = people.filter(p => p.id !== id); trips.forEach(t => t.companions = t.companions.filter(c => c !== id));
+      if (compSel === id) compSel = null;
+      render();
+    }
     else if (act === 'toggleBand') { expanded = !expanded; render(); }
     else if (act === 'toast') toast(a.dataset.msg);
     else if (act === 'arm') {
@@ -1016,7 +1087,14 @@ app.addEventListener('click', ev => {
   if (s) { select(s.dataset.sel, s.dataset.node ? 'node' : s.dataset.card ? 'card' : 'map'); return; }
   if (!ev.target.closest('.card-float, .page, .bubble, .dlg, .menu')) select(null);
 });
+app.addEventListener('input', ev => { if (ev.target.matches('[data-pedit]')) pedit.value = ev.target.value; });
 document.addEventListener('keydown', ev => {
+  // (Enter while an IME is composing only confirms the composition.)
+  if (pedit && ev.target.matches?.('[data-pedit]') && !ev.isComposing && (ev.key === 'Enter' || ev.key === 'Escape')) {
+    ev.preventDefault();
+    if (ev.key === 'Enter') commitPedit(); else pedit = null;
+    render(); return;
+  }
   if (dialog && ev.key === 'Enter' && ev.target.matches('[data-dlg-input]')) { ev.preventDefault(); dialogOk(); }
   else if (ev.key === 'Escape' && (dialog || menu)) { dialog = null; menu = null; render(); }
 });
@@ -1068,7 +1146,7 @@ $('#dockBody').addEventListener('click', ev => {
     document.querySelectorAll('[data-frame]').forEach(b => b.setAttribute('aria-pressed', b.dataset.frame === frame));
     layoutFrame(); render();
   }
-  if (ev.target.id === 'dataReset') { resetData(); sel = null; tripOpen = true; curTripId = 't1'; compSel = null; dialog = menu = null; render(); }
+  if (ev.target.id === 'dataReset') { resetData(); sel = null; tripOpen = true; curTripId = 't1'; compSel = null; dialog = menu = null; pedit = null; disarmPerson(); render(); }
 });
 $('#resetBtn').addEventListener('click', () => { P = { ...DEF }; save(); buildDock(); render(); });
 $('#copyBtn').addEventListener('click', async () => {
