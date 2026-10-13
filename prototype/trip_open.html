@@ -204,6 +204,29 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 /* ---- 旅途 / 浏览 floating section panel (HomeShell._SidePanel) ---- */
 #nav { z-index: 6; }
+/* 旅途 list ↔ trip detail switch. The list sits "before" the detail, so going
+   into a trip pushes the list out left while the records panel comes in from
+   the right and the timeline rises; going back runs the other way. The
+   outgoing card is a frozen copy (.ghost) that plays its exit over the new
+   view, then removes itself. Copies keep their ids (so their id-scoped styles
+   still apply) and live in #ghosts, after #overlay, so lookups always find the
+   live element first and re-renders don't wipe a copy mid-exit. */
+#ghosts { position: absolute; inset: 0; pointer-events: none; }
+.ghost { pointer-events: none !important; z-index: 5; }
+/* The exit is short and the entrance starts a beat later, so the two cards
+   barely overlap and their text never reads on top of each other. */
+.sw-in-right { animation: swInRight var(--swMs) cubic-bezier(.2,.8,.2,1) calc(var(--swMs) * .2) both; }
+.sw-in-left { animation: swInLeft var(--swMs) cubic-bezier(.2,.8,.2,1) calc(var(--swMs) * .2) both; }
+.sw-in-up { animation: swInUp var(--swMs) cubic-bezier(.2,.8,.2,1) calc(var(--swMs) * .35) both; }
+.sw-out-left { animation: swOutLeft calc(var(--swMs) * .45) cubic-bezier(.4,0,1,1) both; }
+.sw-out-right { animation: swOutRight calc(var(--swMs) * .45) cubic-bezier(.4,0,1,1) both; }
+.sw-out-down { animation: swOutDown calc(var(--swMs) * .45) cubic-bezier(.4,0,1,1) both; }
+@keyframes swInRight { from { opacity: 0; transform: translateX(var(--swShift)); } }
+@keyframes swInLeft { from { opacity: 0; transform: translateX(calc(-1 * var(--swShift))); } }
+@keyframes swInUp { from { opacity: 0; transform: translateY(var(--swShift)); } }
+@keyframes swOutLeft { to { opacity: 0; transform: translateX(calc(-1 * var(--swShift))); } }
+@keyframes swOutRight { to { opacity: 0; transform: translateX(var(--swShift)); } }
+@keyframes swOutDown { to { opacity: 0; transform: translateY(var(--swShift)); } }
 #nav.page { position: absolute; inset: 0; z-index: 25; background: var(--surface); display: flex; flex-direction: column; }
 #nav.page.enter { animation: pageIn var(--pageInMs) cubic-bezier(.2,.8,.2,1) both; }
 @keyframes pageIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
@@ -329,6 +352,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     <div id="app">
       <div id="world"><svg id="mapSvg" aria-hidden="true"></svg><div id="marks"></div></div>
       <div id="overlay"></div>
+      <div id="ghosts" aria-hidden="true"></div>
       <div id="tip" hidden></div>
     </div>
   </main>
@@ -373,6 +397,8 @@ const PARAMS = [
   ['browseMaxW', '浏览页内容最大宽度', 720, 400, 1600, 10, '新增：浏览全屏页的列表栏宽（居中）', '旅途/浏览浮窗'],
   ['ichipD', '筛选图标点击区直径', 36, 24, 48, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
   ['ichipIcon', '筛选图标大小', 20, 14, 28, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
+  ['swMs', '旅途列表 ↔ 详情切换时长 (ms)', 300, 0, 900, 10, '新增：列表与旅途详情互相切换的动画', '旅途/浏览浮窗'],
+  ['swShift', '切换位移 (px)', 28, 0, 120, 1, '新增：切换时卡片滑入 / 滑出的距离', '旅途/浏览浮窗'],
   ['pNameFs', '同行人名字字号', 12, 10, 16, 0.5, '新增：同行人标签显示全名', '旅途/浏览浮窗'],
   ['pTagH', '同行人标签高度', 26, 20, 36, 1, '新增：同行人标签（与输入框同高）', '旅途/浏览浮窗'],
   ['pEditW', '同行人输入框宽度', 96, 56, 200, 2, '新增：同行人原地输入框（添加 / 改名）', '旅途/浏览浮窗'],
@@ -418,7 +444,8 @@ const STRINGS = [
   ['companionEmpty', '同行人无记录', '还没有和 TA 一起的记录', ''],
 ];
 const TOGGLES = [
-  ['hideBandOnTrips', '旅途浮窗打开时隐藏时间线', true, '新增：打开左上「旅途」浮窗时，底部时间线暂时收起；关掉浮窗再出现'],
+  ['hideDetailOnTrips', '旅途浮窗打开时隐藏旅途详情', true, '新增：打开左上「旅途」浮窗时，右侧记录栏与底部时间线收起，由旅途列表替换；关掉浮窗再回来'],
+  ['switchAnim', '旅途列表 ↔ 详情切换动画', true, '新增：进入旅途时列表向左滑出、记录栏从右滑入、时间线上浮；返回列表时反向'],
   ['hoverLink', '移入圆点联动地图与右侧栏', true, '新增：移入圆点时地图平移、右侧栏滚动，使该记录居中；点击时两处同时展开选中'],
   ['panelFollow', '右侧栏跟随选中滚动', false, '现状：只有时间线会把选中项滚到中间，右侧栏不动'],
   ['bandShowTitle', '时间线标题栏显示左侧内容', false, '已去掉图标、「旅途名 · 时间线」和「N 个节点」，勾选可对比原样'],
@@ -532,6 +559,7 @@ function photoBg(e, i = 0) {
 let tripOpen = true, expanded = true, sel = null, armed = null, armTimer = null;
 let frame = 'fit';
 // HomeShell's floating section panel: null | 'trips' | 'browse'.
+let plistKeep = 0, browKeep = 0;
 let pageEnter = false; // play the 浏览 page's entry only on the render that opens it
 let nav = null, browseMode = 'type', compSel = null, menu = null, dialog = null;
 // Companion tag being edited in place: { id: personId | 'new', value, fresh }.
@@ -628,13 +656,19 @@ function groupDays() {
 function render() {
   hideTip();
   const peditFocused = document.activeElement?.matches?.('[data-pedit]');
-  const navScroll = $('#navList')?.scrollTop, bodyScroll = $('#plist')?.scrollTop, bandScroll = $('#brow')?.scrollLeft;
+  // The records list and timeline remember their scroll while the 旅途 list
+  // has them hidden, so going back lands where you were.
+  if ($('#plist')) plistKeep = $('#plist').scrollTop;
+  if ($('#brow')) browKeep = $('#brow').scrollLeft;
+  const navScroll = $('#navList')?.scrollTop;
   const r = document.documentElement.style;
   ['radius', 'panelTitleFs', 'panelSubFs', 'dayHeaderFs', 'cardTitleFs', 'cardBodyFs', 'nodeTitleFs', 'timeFs', 'dayArcFs', 'railW', 'bandCollapsedH']
     .forEach(k => r.setProperty('--' + k, P[k] + 'px'));
   ['navTitleFs', 'tripCardTitleFs'].forEach(k => r.setProperty('--' + k, P[k] + 'px'));
   r.setProperty('--browseMaxW', P.browseMaxW + 'px');
   r.setProperty('--pEditW', P.pEditW + 'px');
+  r.setProperty('--swMs', P.swMs + 'ms');
+  r.setProperty('--swShift', P.swShift + 'px');
   r.setProperty('--pNameFs', P.pNameFs + 'px');
   r.setProperty('--pTagH', P.pTagH + 'px');
   r.setProperty('--ichipD', P.ichipD + 'px');
@@ -655,7 +689,7 @@ function render() {
   const bandHeight = expanded ? P.bandH : P.bandCollapsedH;
   // The band is hidden while the 旅途 panel is open; the bottom-left controls
   // then drop back down.
-  const bandShown = tripOpen && !(nav === 'trips' && P.t_hideBandOnTrips);
+  const bandShown = detailShown();
   const bottomInset = bandShown ? bandHeight + P.margin + P.gap : 0;
   let h = '';
 
@@ -692,7 +726,8 @@ function render() {
   // The band stops short of the right side now, so the attribution stays put.
   h += `<div class="attrib" style="bottom:6px">© OpenStreetMap contributors</div>`;
 
-  if (tripOpen) h += panelHtml() + (bandShown ? bandHtml(bandHeight, lastDay) : '');
+  if (bandShown) h += panelHtml() + bandHtml(bandHeight, lastDay);
+  else if (tripOpen && !P.t_hideDetailOnTrips) h += panelHtml();
   // HomeShell's Stack paints the section panel above the whole MapScreen, so it
   // covers the records panel (and the right end of the timeline) while open.
   if (nav) h += navHtml();
@@ -710,8 +745,8 @@ function render() {
   }
   if (dialog) { const i = overlay.querySelector('.dlg input'); if (i) { i.focus({ preventScroll: true }); i.select(); } else overlay.querySelector('.dlg .fill')?.focus({ preventScroll: true }); }
 
-  if (bodyScroll != null && $('#plist')) $('#plist').scrollTop = bodyScroll;
-  if (bandScroll != null && $('#brow')) $('#brow').scrollLeft = bandScroll;
+  if ($('#plist')) $('#plist').scrollTop = plistKeep;
+  if ($('#brow')) $('#brow').scrollLeft = browKeep;
   $('#brow')?.addEventListener('wheel', ev => {
     if (ev.deltaX !== 0) return;
     ev.preventDefault(); ev.currentTarget.scrollLeft += ev.deltaY;
@@ -930,23 +965,72 @@ function dialogOk() {
   }
   dialog = null; render();
 }
+// While the 旅途 list is open it stands in for the trip detail (records panel
+// + timeline) instead of covering it.
+const detailShown = () => tripOpen && !(nav === 'trips' && P.t_hideDetailOnTrips);
+// Which of the right-hand views is up: the 旅途 list, an open trip, or neither.
+const rightView = () => nav === 'browse' ? 'page' : nav === 'trips' ? 'list' : detailShown() ? 'detail' : 'none';
+const SWITCH = {
+  'list>detail': { out: { nav: 'sw-out-left' }, in: { panel: 'sw-in-right', band: 'sw-in-up' } },
+  'detail>list': { out: { panel: 'sw-out-right', band: 'sw-out-down' }, in: { nav: 'sw-in-left' } },
+  'none>list': { in: { nav: 'sw-in-right' } },
+  'list>none': { out: { nav: 'sw-out-right' } },
+};
+/* Apply a state change and re-render, animating the switch between the 旅途
+   list and the trip detail. The cards leaving are snapshotted first and play
+   their exit over the new view; the cards arriving play their entrance. */
+function switchView(change) {
+  const from = rightView();
+  const snaps = {};
+  for (const k of ['nav', 'panel', 'band']) {
+    const el = overlay.querySelector('#' + k);
+    if (!el) continue;
+    const g = el.cloneNode(true);
+    // Carry the scroll positions over (a clone starts unscrolled).
+    const scrolls = [...el.querySelectorAll('[id]')].filter(n => n.scrollTop || n.scrollLeft)
+      .map(n => [n.id, n.scrollTop, n.scrollLeft]);
+    g.classList.remove('sw-in-right', 'sw-in-left', 'sw-in-up');
+    snaps[k] = { g, scrolls };
+  }
+  change();
+  const to = rightView();
+  // With the detail left showing under the list, only the list itself moves.
+  const detailMoves = from === 'detail' || to === 'detail';
+  const spec = P.t_switchAnim && P.swMs > 0 && (P.t_hideDetailOnTrips || !detailMoves) ? SWITCH[from + '>' + to] : null;
+  render();
+  if (!spec) return;
+  for (const [k, cls] of Object.entries(spec.in || {})) overlay.querySelector('#' + k)?.classList.add(cls);
+  for (const [k, cls] of Object.entries(spec.out || {})) {
+    const s = snaps[k];
+    if (!s) continue;
+    s.g.classList.add('ghost', cls);
+    $('#ghosts').appendChild(s.g);
+    s.scrolls.forEach(([id, t, l]) => { const n = s.g.querySelector('#' + id); if (n) { n.scrollTop = t; n.scrollLeft = l; } });
+    const done = () => s.g.remove();
+    s.g.addEventListener('animationend', ev => { if (ev.target === s.g) done(); });
+    setTimeout(done, P.swMs + 200); // reduced motion: no animation, no animationend
+  }
+}
 function toggleNav(key) {
-  nav = nav === key ? null : key; menu = null;
-  // BrowseScreen's mode and CompanionsView's pick are widget state, so they
-  // reset whenever the panel is rebuilt from scratch.
-  if (!P.t_browseKeepState && nav === 'browse') { browseMode = 'type'; compSel = null; }
-  pedit = null; disarmPerson();
-  pageEnter = nav === 'browse'; render(); pageEnter = false;
+  switchView(() => {
+    nav = nav === key ? null : key; menu = null;
+    // BrowseScreen's mode and CompanionsView's pick are widget state, so they
+    // reset whenever the panel is rebuilt from scratch.
+    if (!P.t_browseKeepState && nav === 'browse') { browseMode = 'type'; compSel = null; }
+    pedit = null; disarmPerson();
+    pageEnter = nav === 'browse';
+  });
+  pageEnter = false;
 }
 /* A trip picked in the 旅途 panel opens on the map (records panel + timeline),
    fitted into the area the floating panels leave visible. */
 function openTrip(id) {
-  if (P.t_navClosesOnPick) nav = null;
-  curTripId = id; tripOpen = true; sel = null; poppedId = null; closing = false;
-  render();
   // A freshly opened trip starts at the top of its records and day 1.
-  if ($('#plist')) $('#plist').scrollTop = 0;
-  if ($('#brow')) $('#brow').scrollLeft = 0;
+  if (id !== curTripId || !tripOpen) plistKeep = browKeep = 0;
+  switchView(() => {
+    if (P.t_navClosesOnPick) nav = null;
+    curTripId = id; tripOpen = true; sel = null; poppedId = null; closing = false;
+  });
   const pts = tripEntries().map(e => proj(e.lat, e.lng));
   if (pts.length) {
     const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
@@ -1050,7 +1134,7 @@ app.addEventListener('click', ev => {
     if (act === 'desel') select(null);
     else if (act === 'closeTrip') closeTrip();
     else if (act === 'nav') toggleNav(a.dataset.nav);
-    else if (act === 'navClose') { nav = null; menu = null; render(); }
+    else if (act === 'navClose') switchView(() => { nav = null; menu = null; });
     else if (act === 'openTrip') openTrip(a.dataset.id);
     else if (act === 'newTrip') toast('新建旅途会弹出旅途表单（本原型不包含）');
     else if (act === 'tripMenu') {
