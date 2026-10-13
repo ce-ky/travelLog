@@ -253,25 +253,27 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .ichip:hover { background: rgba(0,0,0,.05); color: var(--on-surface-variant); }
 .ichip .ms { font-size: var(--ichipIcon); }
 .ichip[aria-pressed=true] { background: var(--secondary-container); color: var(--primary); }
-.ichip .av { width: calc(var(--ichipIcon) + 2px); height: calc(var(--ichipIcon) + 2px); border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 500; background: rgba(0,0,0,.07); color: var(--on-surface-variant); }
-.ichip[aria-pressed=true] .av { background: var(--primary); color: var(--on-primary); }
+/* A companion tag: their full name in small text, borderless like the icons. */
+.pchip { height: var(--pTagH); padding: 0 10px; border-radius: calc(var(--pTagH) / 2); font-size: var(--pNameFs); color: var(--on-surface-variant); white-space: nowrap; max-width: 10em; overflow: hidden; text-overflow: ellipsis; transition: background .15s, color .15s; }
+.pchip:hover { background: rgba(0,0,0,.05); color: var(--on-surface); }
+.pchip[aria-pressed=true] { background: var(--secondary-container); color: var(--primary); font-weight: 500; }
 .ichips { align-items: center; }
 /* Companion tags: hover shows a delete badge in the corner; arming it turns the
    badge into an in-place 确认？ pill. */
 .ptag { position: relative; display: inline-flex; }
-.pdel { position: absolute; top: -3px; right: -3px; width: 16px; height: 16px; border-radius: 50%; background: var(--on-surface-variant); color: #fff; display: grid; place-items: center; opacity: 0; transform: scale(.6); transition: opacity .12s, transform .12s; z-index: 2; }
+.pdel { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; background: var(--on-surface-variant); color: #fff; display: grid; place-items: center; opacity: 0; transform: scale(.6); transition: opacity .12s, transform .12s; z-index: 2; }
 .pdel .ms { font-size: 12px; }
 .ptag:hover .pdel, .pdel:focus-visible { opacity: 1; transform: none; }
 .pdel:hover { background: var(--error); }
-.pconfirm { position: absolute; top: -6px; left: calc(100% - 14px); z-index: 3; white-space: nowrap; background: var(--error); color: #fff; font-size: 11px; font-weight: 500; line-height: 1; padding: 4px 7px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.25); animation: tipIn .12s ease-out both; }
+.pconfirm { position: absolute; top: -8px; right: -6px; z-index: 3; white-space: nowrap; background: var(--error); color: #fff; font-size: 11px; font-weight: 500; line-height: 1; padding: 4px 7px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.25); animation: tipIn .12s ease-out both; }
 /* A tag (or the add button) turned into an input in place: type, click outside
    to save, the × inside cancels. */
-.pedit { display: inline-flex; align-items: center; height: 32px; margin: 2px 0; border: 1.5px solid var(--primary); border-radius: 16px; background: var(--surface); padding: 0 2px 0 12px; animation: tipIn .12s ease-out both; }
-.pedit input { width: var(--pEditW); border: 0; outline: none; background: transparent; font: inherit; font-size: 13px; color: var(--on-surface); padding: 0; }
+.pedit { display: inline-flex; align-items: center; height: var(--pTagH); border: 1.5px solid var(--primary); border-radius: calc(var(--pTagH) / 2); background: var(--surface); padding: 0 1px 0 10px; animation: tipIn .12s ease-out both; }
+.pedit input { width: var(--pEditW); border: 0; outline: none; background: transparent; font: inherit; font-size: var(--pNameFs); color: var(--on-surface); padding: 0; }
 .pedit input::placeholder { color: var(--hint); }
-.pedit .pclose { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: var(--hint); flex: none; }
+.pedit .pclose { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: var(--hint); flex: none; }
 .pedit .pclose:hover { background: rgba(0,0,0,.06); color: var(--on-surface); }
-.pedit .pclose .ms { font-size: 16px; }
+.pedit .pclose .ms { font-size: 14px; }
 .mtog { flex: none; display: flex; padding: 2px; border-radius: 13px; background: rgba(0,0,0,.05); }
 .mtog button { height: 22px; padding: 0 10px; border-radius: 11px; font-size: 12px; color: var(--hint); transition: background .15s, color .15s; }
 .mtog button:hover { color: var(--on-surface); }
@@ -371,6 +373,8 @@ const PARAMS = [
   ['browseMaxW', '浏览页内容最大宽度', 720, 400, 1600, 10, '新增：浏览全屏页的列表栏宽（居中）', '旅途/浏览浮窗'],
   ['ichipD', '筛选图标点击区直径', 36, 24, 48, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
   ['ichipIcon', '筛选图标大小', 20, 14, 28, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
+  ['pNameFs', '同行人名字字号', 12, 10, 16, 0.5, '新增：同行人标签显示全名', '旅途/浏览浮窗'],
+  ['pTagH', '同行人标签高度', 26, 20, 36, 1, '新增：同行人标签（与输入框同高）', '旅途/浏览浮窗'],
   ['pEditW', '同行人输入框宽度', 96, 56, 200, 2, '新增：同行人原地输入框（添加 / 改名）', '旅途/浏览浮窗'],
   ['pArmMs', '删除确认自动复原 (ms)', 3000, 1000, 8000, 100, '新增：同行人「确认？」几秒不点自动复原', '旅途/浏览浮窗'],
   ['pageInMs', '浏览页进入动画 (ms)', 200, 0, 600, 10, '新增：浏览全屏页淡入上移', '旅途/浏览浮窗'],
@@ -630,6 +634,8 @@ function render() {
   ['navTitleFs', 'tripCardTitleFs'].forEach(k => r.setProperty('--' + k, P[k] + 'px'));
   r.setProperty('--browseMaxW', P.browseMaxW + 'px');
   r.setProperty('--pEditW', P.pEditW + 'px');
+  r.setProperty('--pNameFs', P.pNameFs + 'px');
+  r.setProperty('--pTagH', P.pTagH + 'px');
   r.setProperty('--ichipD', P.ichipD + 'px');
   r.setProperty('--ichipIcon', P.ichipIcon + 'px');
   r.setProperty('--pageInMs', P.pageInMs + 'ms');
@@ -850,8 +856,7 @@ function browseHtml() {
     <div style="font-size:16px;font-weight:500;margin:16px 0 6px">还没有同行人</div><div style="font-size:12px;color:var(--hint)">添加同行人后，可以按人筛选一起去过的地方。</div>
     <button class="segb" data-act="pAdd" style="margin:20px auto 0;background:var(--primary);color:var(--on-primary);border:0;padding:0 24px 0 16px;align-items:center;gap:8px;font-weight:500"><span class="ms" style="font-size:18px">person_add</span>添加同行人</button></div></div>`;
   if (compSel && !people.some(p => p.id === compSel)) compSel = null;
-  // A companion is just their initial in a small disc; the name is in the
-  // tooltip. Clicking picks them; clicking the picked one again renames it in
+  // A companion tag is their full name in small text. Clicking picks them; clicking the picked one again renames it in
   // place; hovering shows a delete badge that confirms in place.
   h += row(people.map(p => pedit?.id === p.id ? peditHtml() : personTagHtml(p)).join('')
     + (pedit?.id === 'new' ? peditHtml()
@@ -870,7 +875,7 @@ function personTagHtml(p) {
   const del = pArmed === p.id
     ? `<button class="pconfirm" data-act="pDelConfirm" data-id="${p.id}">${esc(S('personConfirm'))}</button>`
     : `<button class="pdel" data-act="pDelArm" data-id="${p.id}" title="${esc(S('personDelete'))}" aria-label="${esc(S('personDelete'))} ${esc(p.name)}"><span class="ms">close</span></button>`;
-  return `<span class="ptag"><button class="ichip" data-act="personChip" data-id="${p.id}" aria-pressed="${on}" title="${esc(tip)}" aria-label="${esc(p.name)}"><span class="av">${esc([...p.name][0])}</span></button>${del}</span>`;
+  return `<span class="ptag"><button class="pchip" data-act="personChip" data-id="${p.id}" aria-pressed="${on}" title="${esc(tip)}">${esc(p.name)}</button>${del}</span>`;
 }
 function peditHtml() {
   return `<span class="pedit"><input data-pedit maxlength="20" placeholder="${esc(S('personHint'))}" value="${esc(pedit.value)}" aria-label="${pedit.id === 'new' ? esc(S('addPerson')) : '同行人姓名'}">
