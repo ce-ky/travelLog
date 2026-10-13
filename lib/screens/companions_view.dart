@@ -5,12 +5,16 @@ import 'package:uuid/uuid.dart';
 import '../models/entry.dart';
 import '../models/person.dart';
 import '../state/app_state.dart';
+import '../widgets/browse_filter_bar.dart';
 import '../widgets/entry_card.dart';
 
 /// Browse the places you went with each companion, and edit companions
 /// (add / rename / delete). Lives inside the Browse tab.
 class CompanionsView extends StatefulWidget {
-  const CompanionsView({super.key});
+  /// Shown at the right end of the filter row (the browse mode toggle).
+  final Widget? trailing;
+
+  const CompanionsView({super.key, this.trailing});
 
   @override
   State<CompanionsView> createState() => _CompanionsViewState();
@@ -29,8 +33,16 @@ class _CompanionsViewState extends State<CompanionsView> {
       _selectedId = null;
     }
 
+    // The filter row stays even with nobody to list, so the mode toggle on
+    // its right end is always there to switch back.
     if (people.isEmpty) {
-      return _EmptyPeople(onAdd: () => _addPerson(context));
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          BrowseFilterBar(filters: const [], trailing: widget.trailing),
+          Expanded(child: _EmptyPeople(onAdd: () => _addPerson(context))),
+        ],
+      );
     }
 
     final selected = people.where((p) => p.id == _selectedId).firstOrNull;
@@ -41,35 +53,26 @@ class _CompanionsViewState extends State<CompanionsView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // People as selectable chips + an add action.
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              for (final p in people)
-                ChoiceChip(
-                  avatar: CircleAvatar(
-                    radius: 10,
-                    child: Text(p.name.characters.first,
-                        style: const TextStyle(fontSize: 11)),
-                  ),
-                  label: Text(p.name),
-                  selected: _selectedId == p.id,
-                  onSelected: (on) =>
-                      setState(() => _selectedId = on ? p.id : null),
-                ),
-              ActionChip(
-                avatar: const Icon(Icons.add, size: 18),
-                label: const Text('添加'),
-                onPressed: () => _addPerson(context),
+        // Each person is just their initial (name in the tooltip), picked one
+        // at a time, plus an add action.
+        BrowseFilterBar(
+          filters: [
+            for (final p in people)
+              IconFilterButton(
+                tooltip: p.name,
+                selected: _selectedId == p.id,
+                onPressed: () => setState(
+                    () => _selectedId = _selectedId == p.id ? null : p.id),
+                child: InitialDisc(name: p.name, selected: _selectedId == p.id),
               ),
-            ],
-          ),
+            IconFilterButton(
+              tooltip: '添加同行人',
+              onPressed: () => _addPerson(context),
+              child: const Icon(Icons.person_add_alt_outlined),
+            ),
+          ],
+          trailing: widget.trailing,
         ),
-        const Divider(height: 1),
         Expanded(
           child: selected == null
               ? const Center(

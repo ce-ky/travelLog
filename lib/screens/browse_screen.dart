@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'companions_view.dart';
 import 'type_list_screen.dart';
 
-/// View 3: browse records two ways — by record type, or by companion. A
-/// broader home than the old type-only tab.
+/// View 3: browse records two ways — by record type, or by companion. The mode
+/// is a small toggle at the right end of each mode's filter row, so the two
+/// share one compact line instead of a separate segmented bar.
 class BrowseScreen extends StatefulWidget {
   const BrowseScreen({super.key});
 
@@ -19,35 +20,82 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: SegmentedButton<_Mode>(
-            segments: const [
-              ButtonSegment(
-                value: _Mode.type,
-                icon: Icon(Icons.category_outlined),
-                label: Text('按类型'),
+    final toggle = _ModeToggle(
+      mode: _mode,
+      onChanged: (m) => setState(() => _mode = m),
+    );
+    return _mode == _Mode.type
+        ? TypeListScreen(trailing: toggle)
+        : CompanionsView(trailing: toggle);
+  }
+}
+
+/// A minimal two-way text toggle (类型 / 同行人): a faint pill track with the
+/// selected side lifted onto a white chip.
+class _ModeToggle extends StatelessWidget {
+  final _Mode mode;
+  final ValueChanged<_Mode> onChanged;
+
+  const _ModeToggle({required this.mode, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _segment(context, _Mode.type, '类型'),
+          _segment(context, _Mode.companion, '同行人'),
+        ],
+      ),
+    );
+  }
+
+  Widget _segment(BuildContext context, _Mode value, String label) {
+    final theme = Theme.of(context);
+    final on = mode == value;
+    return Semantics(
+      button: true,
+      selected: on,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onChanged(value),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            height: 22,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: on ? theme.colorScheme.surface : Colors.transparent,
+              borderRadius: BorderRadius.circular(11),
+              boxShadow: on
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: on ? FontWeight.w500 : FontWeight.normal,
+                color: on ? theme.colorScheme.onSurface : theme.hintColor,
               ),
-              ButtonSegment(
-                value: _Mode.companion,
-                icon: Icon(Icons.people_outline),
-                label: Text('按同行人'),
-              ),
-            ],
-            selected: {_mode},
-            onSelectionChanged: (s) => setState(() => _mode = s.first),
-            showSelectedIcon: false,
+            ),
           ),
         ),
-        const Divider(height: 1),
-        Expanded(
-          child: _mode == _Mode.type
-              ? const TypeListScreen()
-              : const CompanionsView(),
-        ),
-      ],
+      ),
     );
   }
 }

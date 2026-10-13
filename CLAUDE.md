@@ -86,6 +86,11 @@ Screens ──> AppState (ChangeNotifier) ──> TravelRepository (interface)
   `_autoSelectKm = 50` km; trip chips are ordered nearest-first.
 - **Browse (`browse_screen.dart`)** — two modes: by type, and by companion
   (places visited *together* — an entry matches if its trip lists that person).
+  One filter row (`widgets/browse_filter_bar.dart`): borderless icon-only
+  filters (type icons, or each companion's initial — names live in tooltips)
+  with a small 类型/同行人 toggle at its right end. On desktop 浏览 is a
+  full page over the whole window (list in a centred 720-wide column), while
+  旅途 stays a floating right-side panel holding just the trip list.
 
 ## Backend & security (`supabase/`, `lib/config/`)
 
@@ -131,6 +136,9 @@ Don't "clean these up" — they're intentional:
   panel's day headers).
 - Material 3, seed color `0xFF3D8D7A`. `HomeShell` switches between a phone
   layout and a compact desktop layout at a 720px breakpoint.
+- UI changes are usually tuned first in the HTML prototype
+  (`prototype/trip_open.html`) and then ported to Flutter in their own PR. The
+  GitHub Pages preview only reflects the Flutter app, never the prototype.
 - Widget tests inject `MockTravelRepository` and an offline `TileProvider` so
   they never touch the network or Supabase. Follow that pattern for new tests.
 

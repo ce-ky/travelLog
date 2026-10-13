@@ -11,6 +11,8 @@ import 'trip_detail_screen.dart';
 /// View 2: trips as cards. On a wide window it's a two-pane master–detail —
 /// clicking a trip on the left shows only that trip's records on the right, in
 /// place. On a phone, tapping a trip opens its records full-screen instead.
+/// Inside the desktop 旅途 panel ([onTripSelected] set) it's the list alone,
+/// filling the panel: a pick opens the trip on the map, not in a side pane.
 class TripsScreen extends StatefulWidget {
   /// When set (the desktop 旅途 panel), tapping a trip reports it instead of
   /// opening a full-screen detail page — the caller opens the trip's records as
@@ -46,7 +48,10 @@ class _TripsScreenState extends State<TripsScreen> {
 
     final trips = [...appState.trips]
       ..sort((a, b) => b.startDate.compareTo(a.startDate));
-    final wide = MediaQuery.sizeOf(context).width >= _twoPaneBreakpoint;
+    // The desktop panel hands picks to the map, so it never splits — even
+    // though the window itself is wide.
+    final wide = widget.onTripSelected == null &&
+        MediaQuery.sizeOf(context).width >= _twoPaneBreakpoint;
 
     // A selection that points at a since-deleted trip should fall back to none.
     if (_selectedTripId != null &&
