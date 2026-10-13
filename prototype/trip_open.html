@@ -39,7 +39,7 @@
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 html, body { height: 100%; }
-body { background: var(--dock-bg); color: var(--on-surface); font-family: var(--font); overflow: hidden; }
+body { margin: 0; background: var(--dock-bg); color: var(--on-surface); font-family: var(--font); overflow: hidden; }
 .ms { font-family: "Material Symbols Outlined"; font-weight: normal; font-style: normal; font-size: 24px; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; width: 1em; overflow: hidden; white-space: nowrap; direction: ltr; -webkit-font-smoothing: antialiased; user-select: none; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--dock-accent); outline-offset: 2px; }
@@ -362,28 +362,28 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* ======================= parameters (each maps to a Dart constant) ======================= */
 const PARAMS = [
   // [key, label, default, min, max, step, dart location, group]
-  ['panelWidth', '右侧栏宽度', 360, 280, 520, 4, 'map_screen.dart · Positioned(width: 360)', '布局'],
-  ['margin', '浮层外边距', 20, 8, 40, 1, 'map_screen.dart · top/right/bottom: 20', '布局'],
-  ['gap', '时间线右端与右侧栏间距', 12, 0, 32, 1, '新：时间线右缘到右侧栏左缘（右侧栏上下通高）', '布局'],
-  ['radius', '浮层圆角', 16, 0, 28, 1, 'BorderRadius.circular(16)', '布局'],
-  ['bandH', '时间线展开高度', 186, 80, 240, 2, 'TripTimelineBar.expandedHeight', '底部时间线'],
-  ['bandCollapsedH', '时间线收起高度 / 标题栏高', 47, 36, 60, 1, 'TripTimelineBar.collapsedHeight', '底部时间线'],
-  ['pxPerHour', '每小时宽度 (px)', 12, 8, 120, 1, '新增：按 24h 等比的时间轴（每天 = 24 × 该值）', '底部时间线'],
-  ['mapDotHoverScale', '地图圆点悬浮放大倍数', 1.8, 1, 3, 0.1, '新增：地图 _EntryDot 悬浮态（含时间线联动）', '地图气泡'],
-  ['tipMaxW', '悬浮气泡最大宽度', 180, 100, 320, 4, '新增：dot 悬浮气泡（时间 + 标题）', '底部时间线'],
-  ['dotD', '节点圆点直径', 12, 3, 24, 1, '_nodeCell · d（原 26）', '底部时间线'],
+  ['panelWidth', '右侧栏宽度', 444, 280, 520, 4, 'map_screen.dart · Positioned(width: 360)', '布局'],
+  ['margin', '浮层外边距', 8, 8, 40, 1, 'map_screen.dart · top/right/bottom: 20', '布局'],
+  ['gap', '时间线右端与右侧栏间距', 32, 0, 32, 1, '新：时间线右缘到右侧栏左缘（右侧栏上下通高）', '布局'],
+  ['radius', '浮层圆角', 10, 0, 28, 1, 'BorderRadius.circular(16)', '布局'],
+  ['bandH', '时间线展开高度', 150, 80, 240, 2, 'TripTimelineBar.expandedHeight', '底部时间线'],
+  ['bandCollapsedH', '时间线收起高度 / 标题栏高', 36, 36, 60, 1, 'TripTimelineBar.collapsedHeight', '底部时间线'],
+  ['pxPerHour', '每小时宽度 (px)', 10, 8, 120, 1, '新增：按 24h 等比的时间轴（每天 = 24 × 该值）', '底部时间线'],
+  ['mapDotHoverScale', '地图圆点悬浮放大倍数', 2, 1, 3, 0.1, '新增：地图 _EntryDot 悬浮态（含时间线联动）', '地图气泡'],
+  ['tipMaxW', '悬浮气泡最大宽度', 192, 100, 320, 4, '新增：dot 悬浮气泡（时间 + 标题）', '底部时间线'],
+  ['dotD', '节点圆点直径', 8, 3, 24, 1, '_nodeCell · d（原 26）', '底部时间线'],
   ['dotSelD', '选中圆点直径', 13, 4, 30, 1, '_nodeCell · d selected（原 32）', '底部时间线'],
-  ['bubbleDur', '地图气泡弹出时长 (ms)', 320, 100, 800, 10, '新增：_ExpandedBubble 弹出动画', '地图气泡'],
-  ['bubbleDelay', '气泡弹出延迟 (ms)', 180, 0, 600, 10, '新增：等地图开始平移后再弹出', '地图气泡'],
-  ['dotHit', '圆点悬浮感应范围', 22, 8, 40, 1, '新增：dot 周边的 hover/点击热区', '底部时间线'],
-  ['dotHoverScale', '鼠标移入放大倍数', 1.8, 1, 3, 0.1, '新增：hover 放大动画', '底部时间线'],
-  ['nodeTitleFs', '节点标题字号', 12, 10, 16, 0.5, '_nodeCell · fontSize: 12', '底部时间线'],
-  ['timeFs', '时间字号', 11, 9, 14, 0.5, '_nodeCell · HH:mm fontSize: 11', '底部时间线'],
-  ['dayArcFs', '天数字号', 12, 9, 16, 0.5, '新增：天数弧线中心的「第N天」', '底部时间线'],
-  ['axisDrop', '时间轴下移', 28, 0, 90, 1, '新增：时间轴整体离标题栏的额外距离', '底部时间线'],
-  ['closeMs', '关闭时缩小动画时长 (ms)', 240, 80, 800, 10, '新增：关闭旅途时右侧栏与时间线缩小淡出', '布局'],
-  ['arcDepth', '天数弧线深度', 30, 12, 80, 1, '新增：0 时到 24 时弧线的下沉高度', '底部时间线'],
-  ['railW', '轨道线粗细', 1, 1, 5, 0.5, '_rail · height: 2', '底部时间线'],
+  ['bubbleDur', '地图气泡弹出时长 (ms)', 480, 100, 800, 10, '新增：_ExpandedBubble 弹出动画', '地图气泡'],
+  ['bubbleDelay', '气泡弹出延迟 (ms)', 100, 0, 600, 10, '新增：等地图开始平移后再弹出', '地图气泡'],
+  ['dotHit', '圆点悬浮感应范围', 40, 8, 40, 1, '新增：dot 周边的 hover/点击热区', '底部时间线'],
+  ['dotHoverScale', '鼠标移入放大倍数', 2.1, 1, 3, 0.1, '新增：hover 放大动画', '底部时间线'],
+  ['nodeTitleFs', '节点标题字号', 13, 10, 16, 0.5, '_nodeCell · fontSize: 12', '底部时间线'],
+  ['timeFs', '时间字号', 14, 9, 14, 0.5, '_nodeCell · HH:mm fontSize: 11', '底部时间线'],
+  ['dayArcFs', '天数字号', 11, 9, 16, 0.5, '新增：天数弧线中心的「第N天」', '底部时间线'],
+  ['axisDrop', '时间轴下移', 10, 0, 90, 1, '新增：时间轴整体离标题栏的额外距离', '底部时间线'],
+  ['closeMs', '关闭时缩小动画时长 (ms)', 400, 80, 800, 10, '新增：关闭旅途时右侧栏与时间线缩小淡出', '布局'],
+  ['arcDepth', '天数弧线深度', 24, 12, 80, 1, '新增：0 时到 24 时弧线的下沉高度', '底部时间线'],
+  ['railW', '轨道线粗细', 2.5, 1, 5, 0.5, '_rail · height: 2', '底部时间线'],
   ['panelTitleFs', '旅途标题字号', 22, 16, 28, 1, 'TripRecordsPanel · titleLarge', '右侧记录栏'],
   ['panelSubFs', '日期行字号', 12, 10, 15, 0.5, 'TripRecordsPanel · fontSize: 12', '右侧记录栏'],
   ['dayHeaderFs', '「第N天」分组字号', 14, 11, 18, 0.5, 'EntryGroupedList · day header', '右侧记录栏'],
@@ -392,25 +392,25 @@ const PARAMS = [
   ['cardBodyLines', '正文最多行数', 4, 1, 8, 1, 'EntryCard · maxLines: 4', '右侧记录栏'],
   ['cardImgH', '单图高度', 168, 80, 240, 4, '_ImageStrip · height: 168', '右侧记录栏'],
   ['cardMultiImgH', '多图高度', 92, 56, 160, 2, '_ImageStrip · height: 92', '右侧记录栏'],
-  ['navPanelWidth', '旅途浮窗宽度', 450, 300, 620, 2, 'home_shell.dart · panelWidth 450（窗口窄时为 宽 - 40）', '旅途/浏览浮窗'],
-  ['navInset', '浮窗与圆形按钮外边距', 20, 8, 40, 1, 'home_shell.dart · left/top/right/bottom: 20', '旅途/浏览浮窗'],
-  ['browseMaxW', '浏览页内容最大宽度', 720, 400, 1600, 10, '新增：浏览全屏页的列表栏宽（居中）', '旅途/浏览浮窗'],
-  ['ichipD', '筛选图标点击区直径', 36, 24, 48, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
+  ['navPanelWidth', '旅途浮窗宽度', 300, 300, 620, 2, 'home_shell.dart · panelWidth 450（窗口窄时为 宽 - 40）', '旅途/浏览浮窗'],
+  ['navInset', '浮窗与圆形按钮外边距', 15, 8, 40, 1, 'home_shell.dart · left/top/right/bottom: 20', '旅途/浏览浮窗'],
+  ['browseMaxW', '浏览页内容最大宽度', 750, 400, 1600, 10, '新增：浏览全屏页的列表栏宽（居中）', '旅途/浏览浮窗'],
+  ['ichipD', '筛选图标点击区直径', 38, 24, 48, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
   ['ichipIcon', '筛选图标大小', 20, 14, 28, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
-  ['swMs', '旅途列表 ↔ 详情切换时长 (ms)', 300, 0, 900, 10, '新增：列表与旅途详情互相切换的动画', '旅途/浏览浮窗'],
-  ['swShift', '切换位移 (px)', 28, 0, 120, 1, '新增：切换时卡片滑入 / 滑出的距离', '旅途/浏览浮窗'],
-  ['pNameFs', '同行人名字字号', 12, 10, 16, 0.5, '新增：同行人标签显示全名', '旅途/浏览浮窗'],
-  ['pTagH', '同行人标签高度', 26, 20, 36, 1, '新增：同行人标签（与输入框同高）', '旅途/浏览浮窗'],
-  ['pEditW', '同行人输入框宽度', 96, 56, 200, 2, '新增：同行人原地输入框（添加 / 改名）', '旅途/浏览浮窗'],
-  ['pArmMs', '删除确认自动复原 (ms)', 3000, 1000, 8000, 100, '新增：同行人「确认？」几秒不点自动复原', '旅途/浏览浮窗'],
-  ['pageInMs', '浏览页进入动画 (ms)', 200, 0, 600, 10, '新增：浏览全屏页淡入上移', '旅途/浏览浮窗'],
+  ['swMs', '旅途列表 ↔ 详情切换时长 (ms)', 600, 0, 900, 10, '新增：列表与旅途详情互相切换的动画', '旅途/浏览浮窗'],
+  ['swShift', '切换位移 (px)', 50, 0, 120, 1, '新增：切换时卡片滑入 / 滑出的距离', '旅途/浏览浮窗'],
+  ['pNameFs', '同行人名字字号', 13, 10, 16, 0.5, '新增：同行人标签显示全名', '旅途/浏览浮窗'],
+  ['pTagH', '同行人标签高度', 24, 20, 36, 1, '新增：同行人标签（与输入框同高）', '旅途/浏览浮窗'],
+  ['pEditW', '同行人输入框宽度', 80, 56, 200, 2, '新增：同行人原地输入框（添加 / 改名）', '旅途/浏览浮窗'],
+  ['pArmMs', '删除确认自动复原 (ms)', 1000, 1000, 8000, 100, '新增：同行人「确认？」几秒不点自动复原', '旅途/浏览浮窗'],
+  ['pageInMs', '浏览页进入动画 (ms)', 400, 0, 600, 10, '新增：浏览全屏页淡入上移', '旅途/浏览浮窗'],
   ['navTitleFs', '浮窗 / 页面标题字号', 16, 12, 22, 0.5, '_SidePanel · titleMedium bold', '旅途/浏览浮窗'],
-  ['bubbleD', '圆形按钮直径', 56, 36, 72, 1, '_Bubble · d 56（退出 44）', '旅途/浏览浮窗'],
-  ['bubbleGap', '圆形按钮间距', 14, 4, 32, 1, 'home_shell.dart · SizedBox(height: 14)', '旅途/浏览浮窗'],
+  ['bubbleD', '圆形按钮直径', 47, 36, 72, 1, '_Bubble · d 56（退出 44）', '旅途/浏览浮窗'],
+  ['bubbleGap', '圆形按钮间距', 16, 4, 32, 1, 'home_shell.dart · SizedBox(height: 14)', '旅途/浏览浮窗'],
   ['tripCardTitleFs', '旅途卡片标题字号', 16, 12, 22, 0.5, '_TripCard · titleMedium', '旅途/浏览浮窗'],
-  ['tripHue', '京都之旅色相 (H)', 108, 0, 359, 1, '_tripColor · hue 由 trip.id 哈希决定', '颜色'],
-  ['dayLightStart', '第1天亮度 (L)', 0.43, 0.3, 0.9, 0.01, '_tripDayColor · 0.70', '颜色'],
-  ['dayLightEnd', '最后一天亮度 (L)', 0.57, 0.15, 0.7, 0.01, '_tripDayColor · 0.30', '颜色'],
+  ['tripHue', '京都之旅色相 (H)', 156, 0, 359, 1, '_tripColor · hue 由 trip.id 哈希决定', '颜色'],
+  ['dayLightStart', '第1天亮度 (L)', 0.68, 0.3, 0.9, 0.01, '_tripDayColor · 0.70', '颜色'],
+  ['dayLightEnd', '最后一天亮度 (L)', 0.32, 0.15, 0.7, 0.01, '_tripDayColor · 0.30', '颜色'],
 ];
 const STRINGS = [
   // [key, label, default, placeholders]
@@ -769,7 +769,7 @@ function panelHtml() {
       <div class="ph-sub">${esc(S('panelDates', { dates: tripDates(T), n }))}</div>
       ${companionNames(T).length ? `<div class="ph-sub ph-with"><span class="ms">group</span>${esc(S('companions', { names: companionNames(T).join('、') }))}</div>` : ''}</div>
       <button class="ibtn" data-act="closeTrip" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
-    <div class="hair"></div><div id="plist">${list}</div></section>`;
+    <div id="plist">${list}</div></section>`;
 }
 // ctx = true is the plain list form (浏览 panel: EntryCard with showTripContext):
 // the type, "time · trip" and companions lines come back, and the card itself
