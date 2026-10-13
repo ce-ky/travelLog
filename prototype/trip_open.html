@@ -39,7 +39,7 @@
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 html, body { height: 100%; }
-body { background: var(--dock-bg); color: var(--on-surface); font-family: var(--font); overflow: hidden; }
+body { margin: 0; background: var(--dock-bg); color: var(--on-surface); font-family: var(--font); overflow: hidden; }
 .ms { font-family: "Material Symbols Outlined"; font-weight: normal; font-style: normal; font-size: 24px; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; width: 1em; overflow: hidden; white-space: nowrap; direction: ltr; -webkit-font-smoothing: antialiased; user-select: none; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--dock-accent); outline-offset: 2px; }
@@ -204,6 +204,29 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 /* ---- 旅途 / 浏览 floating section panel (HomeShell._SidePanel) ---- */
 #nav { z-index: 6; }
+/* 旅途 list ↔ trip detail switch. The list sits "before" the detail, so going
+   into a trip pushes the list out left while the records panel comes in from
+   the right and the timeline rises; going back runs the other way. The
+   outgoing card is a frozen copy (.ghost) that plays its exit over the new
+   view, then removes itself. Copies keep their ids (so their id-scoped styles
+   still apply) and live in #ghosts, after #overlay, so lookups always find the
+   live element first and re-renders don't wipe a copy mid-exit. */
+#ghosts { position: absolute; inset: 0; pointer-events: none; }
+.ghost { pointer-events: none !important; z-index: 5; }
+/* The exit is short and the entrance starts a beat later, so the two cards
+   barely overlap and their text never reads on top of each other. */
+.sw-in-right { animation: swInRight var(--swMs) cubic-bezier(.2,.8,.2,1) calc(var(--swMs) * .2) both; }
+.sw-in-left { animation: swInLeft var(--swMs) cubic-bezier(.2,.8,.2,1) calc(var(--swMs) * .2) both; }
+.sw-in-up { animation: swInUp var(--swMs) cubic-bezier(.2,.8,.2,1) calc(var(--swMs) * .35) both; }
+.sw-out-left { animation: swOutLeft calc(var(--swMs) * .45) cubic-bezier(.4,0,1,1) both; }
+.sw-out-right { animation: swOutRight calc(var(--swMs) * .45) cubic-bezier(.4,0,1,1) both; }
+.sw-out-down { animation: swOutDown calc(var(--swMs) * .45) cubic-bezier(.4,0,1,1) both; }
+@keyframes swInRight { from { opacity: 0; transform: translateX(var(--swShift)); } }
+@keyframes swInLeft { from { opacity: 0; transform: translateX(calc(-1 * var(--swShift))); } }
+@keyframes swInUp { from { opacity: 0; transform: translateY(var(--swShift)); } }
+@keyframes swOutLeft { to { opacity: 0; transform: translateX(calc(-1 * var(--swShift))); } }
+@keyframes swOutRight { to { opacity: 0; transform: translateX(var(--swShift)); } }
+@keyframes swOutDown { to { opacity: 0; transform: translateY(var(--swShift)); } }
 #nav.page { position: absolute; inset: 0; z-index: 25; background: var(--surface); display: flex; flex-direction: column; }
 #nav.page.enter { animation: pageIn var(--pageInMs) cubic-bezier(.2,.8,.2,1) both; }
 @keyframes pageIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
@@ -253,8 +276,27 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .ichip:hover { background: rgba(0,0,0,.05); color: var(--on-surface-variant); }
 .ichip .ms { font-size: var(--ichipIcon); }
 .ichip[aria-pressed=true] { background: var(--secondary-container); color: var(--primary); }
-.ichip .av { width: calc(var(--ichipIcon) + 2px); height: calc(var(--ichipIcon) + 2px); border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 500; background: rgba(0,0,0,.07); color: var(--on-surface-variant); }
-.ichip[aria-pressed=true] .av { background: var(--primary); color: var(--on-primary); }
+/* A companion tag: their full name in small text, borderless like the icons. */
+.pchip { height: var(--pTagH); padding: 0 10px; border-radius: calc(var(--pTagH) / 2); font-size: var(--pNameFs); color: var(--on-surface-variant); white-space: nowrap; max-width: 10em; overflow: hidden; text-overflow: ellipsis; transition: background .15s, color .15s; }
+.pchip:hover { background: rgba(0,0,0,.05); color: var(--on-surface); }
+.pchip[aria-pressed=true] { background: var(--secondary-container); color: var(--primary); font-weight: 500; }
+.ichips { align-items: center; }
+/* Companion tags: hover shows a delete badge in the corner; arming it turns the
+   badge into an in-place 确认？ pill. */
+.ptag { position: relative; display: inline-flex; }
+.pdel { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; background: var(--on-surface-variant); color: #fff; display: grid; place-items: center; opacity: 0; transform: scale(.6); transition: opacity .12s, transform .12s; z-index: 2; }
+.pdel .ms { font-size: 12px; }
+.ptag:hover .pdel, .pdel:focus-visible { opacity: 1; transform: none; }
+.pdel:hover { background: var(--error); }
+.pconfirm { position: absolute; top: -8px; right: -6px; z-index: 3; white-space: nowrap; background: var(--error); color: #fff; font-size: 11px; font-weight: 500; line-height: 1; padding: 4px 7px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.25); animation: tipIn .12s ease-out both; }
+/* A tag (or the add button) turned into an input in place: type, click outside
+   to save, the × inside cancels. */
+.pedit { display: inline-flex; align-items: center; height: var(--pTagH); border: 1.5px solid var(--primary); border-radius: calc(var(--pTagH) / 2); background: var(--surface); padding: 0 1px 0 10px; animation: tipIn .12s ease-out both; }
+.pedit input { width: var(--pEditW); border: 0; outline: none; background: transparent; font: inherit; font-size: var(--pNameFs); color: var(--on-surface); padding: 0; }
+.pedit input::placeholder { color: var(--hint); }
+.pedit .pclose { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: var(--hint); flex: none; }
+.pedit .pclose:hover { background: rgba(0,0,0,.06); color: var(--on-surface); }
+.pedit .pclose .ms { font-size: 14px; }
 .mtog { flex: none; display: flex; padding: 2px; border-radius: 13px; background: rgba(0,0,0,.05); }
 .mtog button { height: 22px; padding: 0 10px; border-radius: 11px; font-size: 12px; color: var(--hint); transition: background .15s, color .15s; }
 .mtog button:hover { color: var(--on-surface); }
@@ -310,6 +352,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     <div id="app">
       <div id="world"><svg id="mapSvg" aria-hidden="true"></svg><div id="marks"></div></div>
       <div id="overlay"></div>
+      <div id="ghosts" aria-hidden="true"></div>
       <div id="tip" hidden></div>
     </div>
   </main>
@@ -319,28 +362,28 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* ======================= parameters (each maps to a Dart constant) ======================= */
 const PARAMS = [
   // [key, label, default, min, max, step, dart location, group]
-  ['panelWidth', '右侧栏宽度', 360, 280, 520, 4, 'map_screen.dart · Positioned(width: 360)', '布局'],
-  ['margin', '浮层外边距', 20, 8, 40, 1, 'map_screen.dart · top/right/bottom: 20', '布局'],
-  ['gap', '右侧栏与时间线间距', 12, 0, 32, 1, 'map_screen.dart · bandHeight + 12', '布局'],
-  ['radius', '浮层圆角', 16, 0, 28, 1, 'BorderRadius.circular(16)', '布局'],
-  ['bandH', '时间线展开高度', 186, 80, 240, 2, 'TripTimelineBar.expandedHeight', '底部时间线'],
-  ['bandCollapsedH', '时间线收起高度 / 标题栏高', 47, 36, 60, 1, 'TripTimelineBar.collapsedHeight', '底部时间线'],
-  ['pxPerHour', '每小时宽度 (px)', 12, 8, 120, 1, '新增：按 24h 等比的时间轴（每天 = 24 × 该值）', '底部时间线'],
-  ['mapDotHoverScale', '地图圆点悬浮放大倍数', 1.8, 1, 3, 0.1, '新增：地图 _EntryDot 悬浮态（含时间线联动）', '地图气泡'],
-  ['tipMaxW', '悬浮气泡最大宽度', 180, 100, 320, 4, '新增：dot 悬浮气泡（时间 + 标题）', '底部时间线'],
-  ['dotD', '节点圆点直径', 12, 3, 24, 1, '_nodeCell · d（原 26）', '底部时间线'],
+  ['panelWidth', '右侧栏宽度', 444, 280, 520, 4, 'map_screen.dart · Positioned(width: 360)', '布局'],
+  ['margin', '浮层外边距', 8, 8, 40, 1, 'map_screen.dart · top/right/bottom: 20', '布局'],
+  ['gap', '时间线右端与右侧栏间距', 32, 0, 32, 1, '新：时间线右缘到右侧栏左缘（右侧栏上下通高）', '布局'],
+  ['radius', '浮层圆角', 10, 0, 28, 1, 'BorderRadius.circular(16)', '布局'],
+  ['bandH', '时间线展开高度', 150, 80, 240, 2, 'TripTimelineBar.expandedHeight', '底部时间线'],
+  ['bandCollapsedH', '时间线收起高度 / 标题栏高', 36, 36, 60, 1, 'TripTimelineBar.collapsedHeight', '底部时间线'],
+  ['pxPerHour', '每小时宽度 (px)', 10, 8, 120, 1, '新增：按 24h 等比的时间轴（每天 = 24 × 该值）', '底部时间线'],
+  ['mapDotHoverScale', '地图圆点悬浮放大倍数', 2, 1, 3, 0.1, '新增：地图 _EntryDot 悬浮态（含时间线联动）', '地图气泡'],
+  ['tipMaxW', '悬浮气泡最大宽度', 192, 100, 320, 4, '新增：dot 悬浮气泡（时间 + 标题）', '底部时间线'],
+  ['dotD', '节点圆点直径', 8, 3, 24, 1, '_nodeCell · d（原 26）', '底部时间线'],
   ['dotSelD', '选中圆点直径', 13, 4, 30, 1, '_nodeCell · d selected（原 32）', '底部时间线'],
-  ['bubbleDur', '地图气泡弹出时长 (ms)', 320, 100, 800, 10, '新增：_ExpandedBubble 弹出动画', '地图气泡'],
-  ['bubbleDelay', '气泡弹出延迟 (ms)', 180, 0, 600, 10, '新增：等地图开始平移后再弹出', '地图气泡'],
-  ['dotHit', '圆点悬浮感应范围', 22, 8, 40, 1, '新增：dot 周边的 hover/点击热区', '底部时间线'],
-  ['dotHoverScale', '鼠标移入放大倍数', 1.8, 1, 3, 0.1, '新增：hover 放大动画', '底部时间线'],
-  ['nodeTitleFs', '节点标题字号', 12, 10, 16, 0.5, '_nodeCell · fontSize: 12', '底部时间线'],
-  ['timeFs', '时间字号', 11, 9, 14, 0.5, '_nodeCell · HH:mm fontSize: 11', '底部时间线'],
-  ['dayArcFs', '天数字号', 12, 9, 16, 0.5, '新增：天数弧线中心的「第N天」', '底部时间线'],
-  ['axisDrop', '时间轴下移', 28, 0, 90, 1, '新增：时间轴整体离标题栏的额外距离', '底部时间线'],
-  ['closeMs', '关闭时缩小动画时长 (ms)', 240, 80, 800, 10, '新增：关闭旅途时右侧栏与时间线缩小淡出', '布局'],
-  ['arcDepth', '天数弧线深度', 30, 12, 80, 1, '新增：0 时到 24 时弧线的下沉高度', '底部时间线'],
-  ['railW', '轨道线粗细', 1, 1, 5, 0.5, '_rail · height: 2', '底部时间线'],
+  ['bubbleDur', '地图气泡弹出时长 (ms)', 480, 100, 800, 10, '新增：_ExpandedBubble 弹出动画', '地图气泡'],
+  ['bubbleDelay', '气泡弹出延迟 (ms)', 100, 0, 600, 10, '新增：等地图开始平移后再弹出', '地图气泡'],
+  ['dotHit', '圆点悬浮感应范围', 40, 8, 40, 1, '新增：dot 周边的 hover/点击热区', '底部时间线'],
+  ['dotHoverScale', '鼠标移入放大倍数', 2.1, 1, 3, 0.1, '新增：hover 放大动画', '底部时间线'],
+  ['nodeTitleFs', '节点标题字号', 13, 10, 16, 0.5, '_nodeCell · fontSize: 12', '底部时间线'],
+  ['timeFs', '时间字号', 14, 9, 14, 0.5, '_nodeCell · HH:mm fontSize: 11', '底部时间线'],
+  ['dayArcFs', '天数字号', 11, 9, 16, 0.5, '新增：天数弧线中心的「第N天」', '底部时间线'],
+  ['axisDrop', '时间轴下移', 10, 0, 90, 1, '新增：时间轴整体离标题栏的额外距离', '底部时间线'],
+  ['closeMs', '关闭时缩小动画时长 (ms)', 400, 80, 800, 10, '新增：关闭旅途时右侧栏与时间线缩小淡出', '布局'],
+  ['arcDepth', '天数弧线深度', 24, 12, 80, 1, '新增：0 时到 24 时弧线的下沉高度', '底部时间线'],
+  ['railW', '轨道线粗细', 2.5, 1, 5, 0.5, '_rail · height: 2', '底部时间线'],
   ['panelTitleFs', '旅途标题字号', 22, 16, 28, 1, 'TripRecordsPanel · titleLarge', '右侧记录栏'],
   ['panelSubFs', '日期行字号', 12, 10, 15, 0.5, 'TripRecordsPanel · fontSize: 12', '右侧记录栏'],
   ['dayHeaderFs', '「第N天」分组字号', 14, 11, 18, 0.5, 'EntryGroupedList · day header', '右侧记录栏'],
@@ -349,19 +392,25 @@ const PARAMS = [
   ['cardBodyLines', '正文最多行数', 4, 1, 8, 1, 'EntryCard · maxLines: 4', '右侧记录栏'],
   ['cardImgH', '单图高度', 168, 80, 240, 4, '_ImageStrip · height: 168', '右侧记录栏'],
   ['cardMultiImgH', '多图高度', 92, 56, 160, 2, '_ImageStrip · height: 92', '右侧记录栏'],
-  ['navPanelWidth', '旅途浮窗宽度', 450, 300, 620, 2, 'home_shell.dart · panelWidth 450（窗口窄时为 宽 - 40）', '旅途/浏览浮窗'],
-  ['navInset', '浮窗与圆形按钮外边距', 20, 8, 40, 1, 'home_shell.dart · left/top/right/bottom: 20', '旅途/浏览浮窗'],
-  ['browseMaxW', '浏览页内容最大宽度', 720, 400, 1600, 10, '新增：浏览全屏页的列表栏宽（居中）', '旅途/浏览浮窗'],
-  ['ichipD', '筛选图标点击区直径', 36, 24, 48, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
+  ['navPanelWidth', '旅途浮窗宽度', 300, 300, 620, 2, 'home_shell.dart · panelWidth 450（窗口窄时为 宽 - 40）', '旅途/浏览浮窗'],
+  ['navInset', '浮窗与圆形按钮外边距', 15, 8, 40, 1, 'home_shell.dart · left/top/right/bottom: 20', '旅途/浏览浮窗'],
+  ['browseMaxW', '浏览页内容最大宽度', 750, 400, 1600, 10, '新增：浏览全屏页的列表栏宽（居中）', '旅途/浏览浮窗'],
+  ['ichipD', '筛选图标点击区直径', 38, 24, 48, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
   ['ichipIcon', '筛选图标大小', 20, 14, 28, 1, '新增：浏览页第二行的极简图标标签', '旅途/浏览浮窗'],
-  ['pageInMs', '浏览页进入动画 (ms)', 200, 0, 600, 10, '新增：浏览全屏页淡入上移', '旅途/浏览浮窗'],
+  ['swMs', '旅途列表 ↔ 详情切换时长 (ms)', 600, 0, 900, 10, '新增：列表与旅途详情互相切换的动画', '旅途/浏览浮窗'],
+  ['swShift', '切换位移 (px)', 50, 0, 120, 1, '新增：切换时卡片滑入 / 滑出的距离', '旅途/浏览浮窗'],
+  ['pNameFs', '同行人名字字号', 13, 10, 16, 0.5, '新增：同行人标签显示全名', '旅途/浏览浮窗'],
+  ['pTagH', '同行人标签高度', 24, 20, 36, 1, '新增：同行人标签（与输入框同高）', '旅途/浏览浮窗'],
+  ['pEditW', '同行人输入框宽度', 80, 56, 200, 2, '新增：同行人原地输入框（添加 / 改名）', '旅途/浏览浮窗'],
+  ['pArmMs', '删除确认自动复原 (ms)', 1000, 1000, 8000, 100, '新增：同行人「确认？」几秒不点自动复原', '旅途/浏览浮窗'],
+  ['pageInMs', '浏览页进入动画 (ms)', 400, 0, 600, 10, '新增：浏览全屏页淡入上移', '旅途/浏览浮窗'],
   ['navTitleFs', '浮窗 / 页面标题字号', 16, 12, 22, 0.5, '_SidePanel · titleMedium bold', '旅途/浏览浮窗'],
-  ['bubbleD', '圆形按钮直径', 56, 36, 72, 1, '_Bubble · d 56（退出 44）', '旅途/浏览浮窗'],
-  ['bubbleGap', '圆形按钮间距', 14, 4, 32, 1, 'home_shell.dart · SizedBox(height: 14)', '旅途/浏览浮窗'],
+  ['bubbleD', '圆形按钮直径', 47, 36, 72, 1, '_Bubble · d 56（退出 44）', '旅途/浏览浮窗'],
+  ['bubbleGap', '圆形按钮间距', 16, 4, 32, 1, 'home_shell.dart · SizedBox(height: 14)', '旅途/浏览浮窗'],
   ['tripCardTitleFs', '旅途卡片标题字号', 16, 12, 22, 0.5, '_TripCard · titleMedium', '旅途/浏览浮窗'],
-  ['tripHue', '京都之旅色相 (H)', 108, 0, 359, 1, '_tripColor · hue 由 trip.id 哈希决定', '颜色'],
-  ['dayLightStart', '第1天亮度 (L)', 0.43, 0.3, 0.9, 0.01, '_tripDayColor · 0.70', '颜色'],
-  ['dayLightEnd', '最后一天亮度 (L)', 0.57, 0.15, 0.7, 0.01, '_tripDayColor · 0.30', '颜色'],
+  ['tripHue', '京都之旅色相 (H)', 156, 0, 359, 1, '_tripColor · hue 由 trip.id 哈希决定', '颜色'],
+  ['dayLightStart', '第1天亮度 (L)', 0.68, 0.3, 0.9, 0.01, '_tripDayColor · 0.70', '颜色'],
+  ['dayLightEnd', '最后一天亮度 (L)', 0.32, 0.15, 0.7, 0.01, '_tripDayColor · 0.30', '颜色'],
 ];
 const STRINGS = [
   // [key, label, default, placeholders]
@@ -386,11 +435,17 @@ const STRINGS = [
   ['segCompanion', '浏览切换：同行人', '同行人', ''],
   ['typeEmpty', '按类型空状态', '没有符合条件的记录', ''],
   ['addPerson', '添加同行人（图标提示）', '添加同行人', ''],
+  ['personHint', '同行人输入框占位', '姓名', ''],
+  ['personEditTip', '已选中同行人的提示', '{name} · 再点一次改名', '{name}'],
+  ['personDelete', '同行人删除按钮提示', '删除', ''],
+  ['personConfirm', '同行人删除确认', '确认？', ''],
   ['companionPrompt', '未选同行人提示', '选择一位同行人，查看一起去过的地方', ''],
   ['companionHeader', '同行人标题', '与 {name} · {n} 处', '{name} {n}'],
   ['companionEmpty', '同行人无记录', '还没有和 TA 一起的记录', ''],
 ];
 const TOGGLES = [
+  ['hideDetailOnTrips', '旅途浮窗打开时隐藏旅途详情', true, '新增：打开左上「旅途」浮窗时，右侧记录栏与底部时间线收起，由旅途列表替换；关掉浮窗再回来'],
+  ['switchAnim', '旅途列表 ↔ 详情切换动画', true, '新增：进入旅途时列表向左滑出、记录栏从右滑入、时间线上浮；返回列表时反向'],
   ['hoverLink', '移入圆点联动地图与右侧栏', true, '新增：移入圆点时地图平移、右侧栏滚动，使该记录居中；点击时两处同时展开选中'],
   ['panelFollow', '右侧栏跟随选中滚动', false, '现状：只有时间线会把选中项滚到中间，右侧栏不动'],
   ['bandShowTitle', '时间线标题栏显示左侧内容', false, '已去掉图标、「旅途名 · 时间线」和「N 个节点」，勾选可对比原样'],
@@ -504,8 +559,12 @@ function photoBg(e, i = 0) {
 let tripOpen = true, expanded = true, sel = null, armed = null, armTimer = null;
 let frame = 'fit';
 // HomeShell's floating section panel: null | 'trips' | 'browse'.
+let plistKeep = 0, browKeep = 0;
 let pageEnter = false; // play the 浏览 page's entry only on the render that opens it
 let nav = null, browseMode = 'type', compSel = null, menu = null, dialog = null;
+// Companion tag being edited in place: { id: personId | 'new', value, fresh }.
+// pArmed is the tag whose delete badge has turned into 确认？.
+let pedit = null, pArmed = null, pArmTimer = null;
 const typeFilter = new Set(); // lives in AppState, so it outlives the panel
 const FRAMES = { fit: '适应窗口', '1280x800': '1280×800', '1440x900': '1440×900', '1920x1080': '1920×1080', '1024x700': '1024×700' };
 let W = 1280, H = 800;
@@ -596,12 +655,22 @@ function groupDays() {
 /* ======================= overlay (markers, chrome, panels) ======================= */
 function render() {
   hideTip();
-  const navScroll = $('#navList')?.scrollTop, bodyScroll = $('#plist')?.scrollTop, bandScroll = $('#brow')?.scrollLeft;
+  const peditFocused = document.activeElement?.matches?.('[data-pedit]');
+  // The records list and timeline remember their scroll while the 旅途 list
+  // has them hidden, so going back lands where you were.
+  if ($('#plist')) plistKeep = $('#plist').scrollTop;
+  if ($('#brow')) browKeep = $('#brow').scrollLeft;
+  const navScroll = $('#navList')?.scrollTop;
   const r = document.documentElement.style;
   ['radius', 'panelTitleFs', 'panelSubFs', 'dayHeaderFs', 'cardTitleFs', 'cardBodyFs', 'nodeTitleFs', 'timeFs', 'dayArcFs', 'railW', 'bandCollapsedH']
     .forEach(k => r.setProperty('--' + k, P[k] + 'px'));
   ['navTitleFs', 'tripCardTitleFs'].forEach(k => r.setProperty('--' + k, P[k] + 'px'));
   r.setProperty('--browseMaxW', P.browseMaxW + 'px');
+  r.setProperty('--pEditW', P.pEditW + 'px');
+  r.setProperty('--swMs', P.swMs + 'ms');
+  r.setProperty('--swShift', P.swShift + 'px');
+  r.setProperty('--pNameFs', P.pNameFs + 'px');
+  r.setProperty('--pTagH', P.pTagH + 'px');
   r.setProperty('--ichipD', P.ichipD + 'px');
   r.setProperty('--ichipIcon', P.ichipIcon + 'px');
   r.setProperty('--pageInMs', P.pageInMs + 'ms');
@@ -618,7 +687,10 @@ function render() {
   proj = p;
   world.style.transform = `translate(${cam[0]}px, ${cam[1]}px)`;
   const bandHeight = expanded ? P.bandH : P.bandCollapsedH;
-  const bottomInset = tripOpen ? bandHeight + P.margin + P.gap : 0;
+  // The band is hidden while the 旅途 panel is open; the bottom-left controls
+  // then drop back down.
+  const bandShown = detailShown();
+  const bottomInset = bandShown ? bandHeight + P.margin + P.gap : 0;
   let h = '';
 
   // Markers: every record is the same route-coloured dot, image or not.
@@ -651,9 +723,11 @@ function render() {
   h += `<button class="fab" data-act="toast" data-msg="退出：回到登录页（本原型不包含）" title="退出" style="left:${bx + (bd - sd) / 2}px;top:${by + 2 * (bd + P.bubbleGap)}px;width:${sd}px;height:${sd}px"><span class="ms" style="font-size:20px">logout</span></button>`;
   h += `<button class="fab" data-act="toast" data-msg="地图设置不在本原型范围内" title="地图设置" style="left:16px;bottom:${16 + bottomInset}px;width:48px;height:48px"><span class="ms">style</span></button>`;
   h += `<div class="scale" style="bottom:${72 + bottomInset}px">2 km<div class="bar"></div></div>`;
-  h += `<div class="attrib" style="bottom:${6 + bottomInset}px">© OpenStreetMap contributors</div>`;
+  // The band stops short of the right side now, so the attribution stays put.
+  h += `<div class="attrib" style="bottom:6px">© OpenStreetMap contributors</div>`;
 
-  if (tripOpen) h += panelHtml(bandHeight) + bandHtml(bandHeight, lastDay);
+  if (bandShown) h += panelHtml() + bandHtml(bandHeight, lastDay);
+  else if (tripOpen && !P.t_hideDetailOnTrips) h += panelHtml();
   // HomeShell's Stack paints the section panel above the whole MapScreen, so it
   // covers the records panel (and the right end of the timeline) while open.
   if (nav) h += navHtml();
@@ -661,17 +735,25 @@ function render() {
   if (dialog) h += dialogHtml();
   overlay.innerHTML = h;
   if (navScroll != null && $('#navList')) $('#navList').scrollTop = navScroll;
+  // The inline companion input keeps its focus (and caret) through re-renders;
+  // when it has just opened, it takes focus with its text selected.
+  const pin = overlay.querySelector('[data-pedit]');
+  if (pin && (peditFocused || pedit.fresh)) {
+    pin.focus({ preventScroll: true });
+    if (pedit.fresh) pin.select(); else pin.setSelectionRange(pin.value.length, pin.value.length);
+    pedit.fresh = false;
+  }
   if (dialog) { const i = overlay.querySelector('.dlg input'); if (i) { i.focus({ preventScroll: true }); i.select(); } else overlay.querySelector('.dlg .fill')?.focus({ preventScroll: true }); }
 
-  if (bodyScroll != null && $('#plist')) $('#plist').scrollTop = bodyScroll;
-  if (bandScroll != null && $('#brow')) $('#brow').scrollLeft = bandScroll;
+  if ($('#plist')) $('#plist').scrollTop = plistKeep;
+  if ($('#brow')) $('#brow').scrollLeft = browKeep;
   $('#brow')?.addEventListener('wheel', ev => {
     if (ev.deltaX !== 0) return;
     ev.preventDefault(); ev.currentTarget.scrollLeft += ev.deltaY;
   }, { passive: false });
 }
 
-function panelHtml(bandHeight) {
+function panelHtml() {
   const T = trip(), n = tripEntries().length;
   let list = '';
   if (!n) list = `<div class="empty">这趟旅途还没有记录</div>`;
@@ -681,12 +763,13 @@ function panelHtml(bandHeight) {
     list += `<div class="dayh">${esc(S('dayHeader', { n: d, m: f.getMonth() + 1, d: f.getDate() }))}</div>`;
     for (const e of days[d]) list += cardHtml(e);
   }
-  return `<section id="panel" class="card-float" style="top:${P.margin}px;right:${P.margin}px;bottom:${P.margin + bandHeight + P.gap}px;width:${P.panelWidth}px">
+  // Full height: the records panel runs from the top margin to the bottom one.
+  return `<section id="panel" class="card-float" style="top:${P.margin}px;right:${P.margin}px;bottom:${P.margin}px;width:${P.panelWidth}px">
     <div class="ph-head"><div class="tx"><div class="ph-title">${esc(T.title)}</div>
       <div class="ph-sub">${esc(S('panelDates', { dates: tripDates(T), n }))}</div>
       ${companionNames(T).length ? `<div class="ph-sub ph-with"><span class="ms">group</span>${esc(S('companions', { names: companionNames(T).join('、') }))}</div>` : ''}</div>
       <button class="ibtn" data-act="closeTrip" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
-    <div class="hair"></div><div id="plist">${list}</div></section>`;
+    <div id="plist">${list}</div></section>`;
 }
 // ctx = true is the plain list form (浏览 panel: EntryCard with showTripContext):
 // the type, "time · trip" and companions lines come back, and the card itself
@@ -755,7 +838,8 @@ function bandHtml(bandHeight, lastDay) {
     }
   }
   const cells = `<div class="track" style="width:${X(totalDays + 1) + PAD}px">${html}</div>`;
-  return `<section id="band" class="card-float" style="left:${P.margin}px;right:${P.margin}px;bottom:${P.margin}px;height:${bandHeight}px">
+  // The band ends where the records panel begins (less the gap between them).
+  return `<section id="band" class="card-float" style="left:${P.margin}px;right:${P.margin + P.panelWidth + P.gap}px;bottom:${P.margin}px;height:${bandHeight}px">
     <div class="bh">${P.t_bandShowTitle ? `<span class="ms ic" style="color:${acc}">timeline</span><span class="ti">${esc(S('bandTitle', { trip: trip().title }))}</span>
       <span class="n">${esc(S('bandCount', { n: tripEntries().length }))}</span>` : ''}<span class="sp"></span>
       <button class="ibtn cmp" data-act="closeTrip" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
@@ -810,23 +894,50 @@ function browseHtml() {
     h += list.length ? `<div id="navList" class="scrollv">${list.map(e => cardHtml(e, true)).join('')}</div>` : `<div class="cempty">${esc(S('typeEmpty'))}</div>`;
     return h;
   }
-  if (!people.length) return row('') + `<div class="cempty"><div><span class="ms" style="font-size:56px;color:var(--hint)">group</span>
+  if (!people.length) return row(pedit?.id === 'new' ? peditHtml() : '') + `<div class="cempty"><div><span class="ms" style="font-size:56px;color:var(--hint)">group</span>
     <div style="font-size:16px;font-weight:500;margin:16px 0 6px">还没有同行人</div><div style="font-size:12px;color:var(--hint)">添加同行人后，可以按人筛选一起去过的地方。</div>
-    <button class="segb" data-act="addPerson" style="margin:20px auto 0;background:var(--primary);color:var(--on-primary);border:0;padding:0 24px 0 16px;align-items:center;gap:8px;font-weight:500"><span class="ms" style="font-size:18px">person_add</span>添加同行人</button></div></div>`;
+    <button class="segb" data-act="pAdd" style="margin:20px auto 0;background:var(--primary);color:var(--on-primary);border:0;padding:0 24px 0 16px;align-items:center;gap:8px;font-weight:500"><span class="ms" style="font-size:18px">person_add</span>添加同行人</button></div></div>`;
   if (compSel && !people.some(p => p.id === compSel)) compSel = null;
-  // A companion is just their initial in a small disc; the name is in the tooltip.
-  h += row(people.map(p => `<button class="ichip" data-act="personChip" data-id="${p.id}" aria-pressed="${compSel === p.id}" title="${esc(p.name)}" aria-label="${esc(p.name)}"><span class="av">${esc([...p.name][0])}</span></button>`).join('')
-    + `<button class="ichip" data-act="addPerson" title="${esc(S('addPerson'))}" aria-label="${esc(S('addPerson'))}"><span class="ms">person_add</span></button>`);
+  // A companion tag is their full name in small text. Clicking picks them; clicking the picked one again renames it in
+  // place; hovering shows a delete badge that confirms in place.
+  h += row(people.map(p => pedit?.id === p.id ? peditHtml() : personTagHtml(p)).join('')
+    + (pedit?.id === 'new' ? peditHtml()
+      : `<button class="ichip" data-act="pAdd" title="${esc(S('addPerson'))}" aria-label="${esc(S('addPerson'))}"><span class="ms">person_add</span></button>`));
   const pc = people.find(p => p.id === compSel);
   if (!pc) return h + `<div class="cempty">${esc(S('companionPrompt'))}</div>`;
   // Places visited together: every record of every trip that lists this person.
   const list = newest(entries.filter(e => tripById(e.trip)?.companions.includes(pc.id)));
-  h += `<div class="chead"><span class="ti">${esc(S('companionHeader', { name: pc.name, n: list.length }))}</span>
-    <button class="ibtn" data-act="renamePerson" title="重命名"><span class="ms">drive_file_rename_outline</span></button>
-    <button class="ibtn" data-act="deletePerson" title="删除"><span class="ms">delete</span></button></div>`;
+  // Rename / delete now live on the tag itself, so the header is just a caption.
+  h += `<div class="chead" style="padding-right:16px"><span class="ti">${esc(S('companionHeader', { name: pc.name, n: list.length }))}</span></div>`;
   h += list.length ? `<div id="navList" class="scrollv">${list.map(e => cardHtml(e, true)).join('')}</div>` : `<div class="cempty">${esc(S('companionEmpty'))}</div>`;
   return h;
 }
+function personTagHtml(p) {
+  const on = compSel === p.id, tip = on ? S('personEditTip', { name: p.name }) : p.name;
+  const del = pArmed === p.id
+    ? `<button class="pconfirm" data-act="pDelConfirm" data-id="${p.id}">${esc(S('personConfirm'))}</button>`
+    : `<button class="pdel" data-act="pDelArm" data-id="${p.id}" title="${esc(S('personDelete'))}" aria-label="${esc(S('personDelete'))} ${esc(p.name)}"><span class="ms">close</span></button>`;
+  return `<span class="ptag"><button class="pchip" data-act="personChip" data-id="${p.id}" aria-pressed="${on}" title="${esc(tip)}">${esc(p.name)}</button>${del}</span>`;
+}
+function peditHtml() {
+  return `<span class="pedit"><input data-pedit maxlength="20" placeholder="${esc(S('personHint'))}" value="${esc(pedit.value)}" aria-label="${pedit.id === 'new' ? esc(S('addPerson')) : '同行人姓名'}">
+    <button class="pclose" data-act="pEditCancel" title="取消" aria-label="取消"><span class="ms">close</span></button></span>`;
+}
+function startPedit(id) {
+  disarmPerson();
+  pedit = { id, value: id === 'new' ? '' : people.find(p => p.id === id).name, fresh: true };
+  render();
+}
+/* Save the inline input: a new name adds the companion (and picks them), an
+   edited one renames; an empty or unchanged field just closes. */
+function commitPedit() {
+  if (!pedit) return;
+  const v = pedit.value.trim();
+  if (pedit.id === 'new') { if (v) { const id = 'p' + Date.now(); people.push({ id, name: v }); compSel = id; } }
+  else { const p = people.find(x => x.id === pedit.id); if (p && v) p.name = v; }
+  pedit = null;
+}
+function disarmPerson() { clearTimeout(pArmTimer); pArmed = null; }
 function menuHtml() {
   return `<div class="scrim" data-act="menuDismiss"></div><div class="menu" style="right:${menu.right}px;top:${menu.top}px">
     <button data-act="menuRename"><span class="ms">drive_file_rename_outline</span>重命名</button>
@@ -834,7 +945,7 @@ function menuHtml() {
     <button data-act="menuDelete"><span class="ms">delete</span>删除</button></div>`;
 }
 function dialogHtml() {
-  const d = dialog, t = d.trip && tripById(d.trip), p = d.person && people.find(x => x.id === d.person);
+  const d = dialog, t = d.trip && tripById(d.trip);
   const field = (hint, v = '') => `<input data-dlg-input placeholder="${hint}" value="${esc(v)}">`;
   const acts = (ok, err) => `<div class="acts"><button data-act="dlgCancel">取消</button><button class="fill${err ? ' err' : ''}" data-act="dlgOk">${ok}</button></div>`;
   let inner = '';
@@ -842,11 +953,6 @@ function dialogHtml() {
   else if (d.kind === 'deleteTrip') {
     const n = tripEntries(t.id).length;
     inner = `<h2>删除旅途</h2><p>${esc(n ? `「${t.title}」下的 ${n} 条记录也会一并删除，确定吗？` : `确定删除「${t.title}」吗？`)}</p>${acts('删除', true)}`;
-  } else if (d.kind === 'addPerson') inner = `<h2>添加同行人</h2>${field('姓名')}${acts('确定')}`;
-  else if (d.kind === 'renamePerson') inner = `<h2>重命名</h2>${field('姓名', p.name)}${acts('确定')}`;
-  else if (d.kind === 'deletePerson') {
-    const n = trips.filter(x => x.companions.includes(p.id)).length;
-    inner = `<h2>删除同行人</h2><p>${esc(n ? `「${p.name}」会从 ${n} 趟旅途的同行人中移除，确定吗？` : `确定删除「${p.name}」吗？`)}</p>${acts('删除', true)}`;
   }
   return `<div class="scrim dim" data-act="dlgCancel"><div class="dlg" role="dialog" aria-modal="true" data-stop>${inner}</div></div>`;
 }
@@ -856,30 +962,75 @@ function dialogOk() {
   else if (d.kind === 'deleteTrip') {
     trips = trips.filter(t => t.id !== d.trip); entries = entries.filter(e => e.trip !== d.trip);
     if (curTripId === d.trip) { tripOpen = false; sel = null; curTripId = trips[0]?.id; }
-  } else if (d.kind === 'addPerson') {
-    if (v) { const id = 'p' + Date.now(); people.push({ id, name: v }); compSel = id; }
-  } else if (d.kind === 'renamePerson') { const p = people.find(x => x.id === d.person); if (v) p.name = v; }
-  else if (d.kind === 'deletePerson') {
-    people = people.filter(p => p.id !== d.person); trips.forEach(t => t.companions = t.companions.filter(c => c !== d.person));
   }
   dialog = null; render();
 }
+// While the 旅途 list is open it stands in for the trip detail (records panel
+// + timeline) instead of covering it.
+const detailShown = () => tripOpen && !(nav === 'trips' && P.t_hideDetailOnTrips);
+// Which of the right-hand views is up: the 旅途 list, an open trip, or neither.
+const rightView = () => nav === 'browse' ? 'page' : nav === 'trips' ? 'list' : detailShown() ? 'detail' : 'none';
+const SWITCH = {
+  'list>detail': { out: { nav: 'sw-out-left' }, in: { panel: 'sw-in-right', band: 'sw-in-up' } },
+  'detail>list': { out: { panel: 'sw-out-right', band: 'sw-out-down' }, in: { nav: 'sw-in-left' } },
+  'none>list': { in: { nav: 'sw-in-right' } },
+  'list>none': { out: { nav: 'sw-out-right' } },
+};
+/* Apply a state change and re-render, animating the switch between the 旅途
+   list and the trip detail. The cards leaving are snapshotted first and play
+   their exit over the new view; the cards arriving play their entrance. */
+function switchView(change) {
+  const from = rightView();
+  const snaps = {};
+  for (const k of ['nav', 'panel', 'band']) {
+    const el = overlay.querySelector('#' + k);
+    if (!el) continue;
+    const g = el.cloneNode(true);
+    // Carry the scroll positions over (a clone starts unscrolled).
+    const scrolls = [...el.querySelectorAll('[id]')].filter(n => n.scrollTop || n.scrollLeft)
+      .map(n => [n.id, n.scrollTop, n.scrollLeft]);
+    g.classList.remove('sw-in-right', 'sw-in-left', 'sw-in-up');
+    snaps[k] = { g, scrolls };
+  }
+  change();
+  const to = rightView();
+  // With the detail left showing under the list, only the list itself moves.
+  const detailMoves = from === 'detail' || to === 'detail';
+  const spec = P.t_switchAnim && P.swMs > 0 && (P.t_hideDetailOnTrips || !detailMoves) ? SWITCH[from + '>' + to] : null;
+  render();
+  if (!spec) return;
+  for (const [k, cls] of Object.entries(spec.in || {})) overlay.querySelector('#' + k)?.classList.add(cls);
+  for (const [k, cls] of Object.entries(spec.out || {})) {
+    const s = snaps[k];
+    if (!s) continue;
+    s.g.classList.add('ghost', cls);
+    $('#ghosts').appendChild(s.g);
+    s.scrolls.forEach(([id, t, l]) => { const n = s.g.querySelector('#' + id); if (n) { n.scrollTop = t; n.scrollLeft = l; } });
+    const done = () => s.g.remove();
+    s.g.addEventListener('animationend', ev => { if (ev.target === s.g) done(); });
+    setTimeout(done, P.swMs + 200); // reduced motion: no animation, no animationend
+  }
+}
 function toggleNav(key) {
-  nav = nav === key ? null : key; menu = null;
-  // BrowseScreen's mode and CompanionsView's pick are widget state, so they
-  // reset whenever the panel is rebuilt from scratch.
-  if (!P.t_browseKeepState && nav === 'browse') { browseMode = 'type'; compSel = null; }
-  pageEnter = nav === 'browse'; render(); pageEnter = false;
+  switchView(() => {
+    nav = nav === key ? null : key; menu = null;
+    // BrowseScreen's mode and CompanionsView's pick are widget state, so they
+    // reset whenever the panel is rebuilt from scratch.
+    if (!P.t_browseKeepState && nav === 'browse') { browseMode = 'type'; compSel = null; }
+    pedit = null; disarmPerson();
+    pageEnter = nav === 'browse';
+  });
+  pageEnter = false;
 }
 /* A trip picked in the 旅途 panel opens on the map (records panel + timeline),
    fitted into the area the floating panels leave visible. */
 function openTrip(id) {
-  if (P.t_navClosesOnPick) nav = null;
-  curTripId = id; tripOpen = true; sel = null; poppedId = null; closing = false;
-  render();
   // A freshly opened trip starts at the top of its records and day 1.
-  if ($('#plist')) $('#plist').scrollTop = 0;
-  if ($('#brow')) $('#brow').scrollLeft = 0;
+  if (id !== curTripId || !tripOpen) plistKeep = browKeep = 0;
+  switchView(() => {
+    if (P.t_navClosesOnPick) nav = null;
+    curTripId = id; tripOpen = true; sel = null; poppedId = null; closing = false;
+  });
   const pts = tripEntries().map(e => proj(e.lat, e.lng));
   if (pts.length) {
     const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
@@ -971,6 +1122,9 @@ app.addEventListener('mouseover', ev => {
   if (id && P.t_hoverLink) hoverTimer = setTimeout(() => { centerMap(id); centerPanel(id); }, 90);
 });
 app.addEventListener('click', ev => {
+  // Any click outside the inline companion input saves it, then the click
+  // carries on to whatever it hit (the old node still knows its data-act).
+  if (pedit && !ev.target.closest('.pedit')) { commitPedit(); render(); }
   const a = ev.target.closest('[data-act]');
   // Clicks inside a dialog only count on its own buttons, not on the scrim behind.
   if (ev.target.closest('[data-stop]') && !a?.closest('[data-stop]')) return;
@@ -980,7 +1134,7 @@ app.addEventListener('click', ev => {
     if (act === 'desel') select(null);
     else if (act === 'closeTrip') closeTrip();
     else if (act === 'nav') toggleNav(a.dataset.nav);
-    else if (act === 'navClose') { nav = null; menu = null; render(); }
+    else if (act === 'navClose') switchView(() => { nav = null; menu = null; });
     else if (act === 'openTrip') openTrip(a.dataset.id);
     else if (act === 'newTrip') toast('新建旅途会弹出旅途表单（本原型不包含）');
     else if (act === 'tripMenu') {
@@ -997,10 +1151,23 @@ app.addEventListener('click', ev => {
     else if (act === 'dlgOk') dialogOk();
     else if (act === 'mode') { browseMode = a.dataset.mode; render(); }
     else if (act === 'typeChip') { const k = a.dataset.type; typeFilter.has(k) ? typeFilter.delete(k) : typeFilter.add(k); render(); }
-    else if (act === 'personChip') { compSel = compSel === a.dataset.id ? null : a.dataset.id; render(); }
-    else if (act === 'addPerson') { dialog = { kind: 'addPerson' }; render(); }
-    else if (act === 'renamePerson') { dialog = { kind: 'renamePerson', person: compSel }; render(); }
-    else if (act === 'deletePerson') { dialog = { kind: 'deletePerson', person: compSel }; render(); }
+    else if (act === 'personChip') {
+      // First click picks the companion; a click on the picked one renames it.
+      if (compSel === a.dataset.id) startPedit(a.dataset.id);
+      else { compSel = a.dataset.id; disarmPerson(); render(); }
+    }
+    else if (act === 'pAdd') startPedit('new');
+    else if (act === 'pEditCancel') { pedit = null; render(); }
+    else if (act === 'pDelArm') {
+      pArmed = a.dataset.id; render(); clearTimeout(pArmTimer);
+      pArmTimer = setTimeout(() => { pArmed = null; render(); }, P.pArmMs);
+    } else if (act === 'pDelConfirm') {
+      // Drops them from every trip's companions; the records themselves stay.
+      const id = a.dataset.id; disarmPerson();
+      people = people.filter(p => p.id !== id); trips.forEach(t => t.companions = t.companions.filter(c => c !== id));
+      if (compSel === id) compSel = null;
+      render();
+    }
     else if (act === 'toggleBand') { expanded = !expanded; render(); }
     else if (act === 'toast') toast(a.dataset.msg);
     else if (act === 'arm') {
@@ -1016,7 +1183,14 @@ app.addEventListener('click', ev => {
   if (s) { select(s.dataset.sel, s.dataset.node ? 'node' : s.dataset.card ? 'card' : 'map'); return; }
   if (!ev.target.closest('.card-float, .page, .bubble, .dlg, .menu')) select(null);
 });
+app.addEventListener('input', ev => { if (ev.target.matches('[data-pedit]')) pedit.value = ev.target.value; });
 document.addEventListener('keydown', ev => {
+  // (Enter while an IME is composing only confirms the composition.)
+  if (pedit && ev.target.matches?.('[data-pedit]') && !ev.isComposing && (ev.key === 'Enter' || ev.key === 'Escape')) {
+    ev.preventDefault();
+    if (ev.key === 'Enter') commitPedit(); else pedit = null;
+    render(); return;
+  }
   if (dialog && ev.key === 'Enter' && ev.target.matches('[data-dlg-input]')) { ev.preventDefault(); dialogOk(); }
   else if (ev.key === 'Escape' && (dialog || menu)) { dialog = null; menu = null; render(); }
 });
@@ -1068,7 +1242,7 @@ $('#dockBody').addEventListener('click', ev => {
     document.querySelectorAll('[data-frame]').forEach(b => b.setAttribute('aria-pressed', b.dataset.frame === frame));
     layoutFrame(); render();
   }
-  if (ev.target.id === 'dataReset') { resetData(); sel = null; tripOpen = true; curTripId = 't1'; compSel = null; dialog = menu = null; render(); }
+  if (ev.target.id === 'dataReset') { resetData(); sel = null; tripOpen = true; curTripId = 't1'; compSel = null; dialog = menu = null; pedit = null; disarmPerson(); render(); }
 });
 $('#resetBtn').addEventListener('click', () => { P = { ...DEF }; save(); buildDock(); render(); });
 $('#copyBtn').addEventListener('click', async () => {
