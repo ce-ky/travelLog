@@ -340,7 +340,7 @@ const PARAMS = [
   // [key, label, default, min, max, step, dart location, group]
   ['panelWidth', '右侧栏宽度', 360, 280, 520, 4, 'map_screen.dart · Positioned(width: 360)', '布局'],
   ['margin', '浮层外边距', 20, 8, 40, 1, 'map_screen.dart · top/right/bottom: 20', '布局'],
-  ['gap', '右侧栏与时间线间距', 12, 0, 32, 1, 'map_screen.dart · bandHeight + 12', '布局'],
+  ['gap', '时间线右端与右侧栏间距', 12, 0, 32, 1, '新：时间线右缘到右侧栏左缘（右侧栏上下通高）', '布局'],
   ['radius', '浮层圆角', 16, 0, 28, 1, 'BorderRadius.circular(16)', '布局'],
   ['bandH', '时间线展开高度', 186, 80, 240, 2, 'TripTimelineBar.expandedHeight', '底部时间线'],
   ['bandCollapsedH', '时间线收起高度 / 标题栏高', 47, 36, 60, 1, 'TripTimelineBar.collapsedHeight', '底部时间线'],
@@ -418,6 +418,7 @@ const STRINGS = [
   ['companionEmpty', '同行人无记录', '还没有和 TA 一起的记录', ''],
 ];
 const TOGGLES = [
+  ['hideBandOnTrips', '旅途浮窗打开时隐藏时间线', true, '新增：打开左上「旅途」浮窗时，底部时间线暂时收起；关掉浮窗再出现'],
   ['hoverLink', '移入圆点联动地图与右侧栏', true, '新增：移入圆点时地图平移、右侧栏滚动，使该记录居中；点击时两处同时展开选中'],
   ['panelFollow', '右侧栏跟随选中滚动', false, '现状：只有时间线会把选中项滚到中间，右侧栏不动'],
   ['bandShowTitle', '时间线标题栏显示左侧内容', false, '已去掉图标、「旅途名 · 时间线」和「N 个节点」，勾选可对比原样'],
@@ -652,7 +653,10 @@ function render() {
   proj = p;
   world.style.transform = `translate(${cam[0]}px, ${cam[1]}px)`;
   const bandHeight = expanded ? P.bandH : P.bandCollapsedH;
-  const bottomInset = tripOpen ? bandHeight + P.margin + P.gap : 0;
+  // The band is hidden while the 旅途 panel is open; the bottom-left controls
+  // then drop back down.
+  const bandShown = tripOpen && !(nav === 'trips' && P.t_hideBandOnTrips);
+  const bottomInset = bandShown ? bandHeight + P.margin + P.gap : 0;
   let h = '';
 
   // Markers: every record is the same route-coloured dot, image or not.
@@ -685,9 +689,10 @@ function render() {
   h += `<button class="fab" data-act="toast" data-msg="退出：回到登录页（本原型不包含）" title="退出" style="left:${bx + (bd - sd) / 2}px;top:${by + 2 * (bd + P.bubbleGap)}px;width:${sd}px;height:${sd}px"><span class="ms" style="font-size:20px">logout</span></button>`;
   h += `<button class="fab" data-act="toast" data-msg="地图设置不在本原型范围内" title="地图设置" style="left:16px;bottom:${16 + bottomInset}px;width:48px;height:48px"><span class="ms">style</span></button>`;
   h += `<div class="scale" style="bottom:${72 + bottomInset}px">2 km<div class="bar"></div></div>`;
-  h += `<div class="attrib" style="bottom:${6 + bottomInset}px">© OpenStreetMap contributors</div>`;
+  // The band stops short of the right side now, so the attribution stays put.
+  h += `<div class="attrib" style="bottom:6px">© OpenStreetMap contributors</div>`;
 
-  if (tripOpen) h += panelHtml(bandHeight) + bandHtml(bandHeight, lastDay);
+  if (tripOpen) h += panelHtml() + (bandShown ? bandHtml(bandHeight, lastDay) : '');
   // HomeShell's Stack paints the section panel above the whole MapScreen, so it
   // covers the records panel (and the right end of the timeline) while open.
   if (nav) h += navHtml();
@@ -713,7 +718,7 @@ function render() {
   }, { passive: false });
 }
 
-function panelHtml(bandHeight) {
+function panelHtml() {
   const T = trip(), n = tripEntries().length;
   let list = '';
   if (!n) list = `<div class="empty">这趟旅途还没有记录</div>`;
@@ -723,7 +728,8 @@ function panelHtml(bandHeight) {
     list += `<div class="dayh">${esc(S('dayHeader', { n: d, m: f.getMonth() + 1, d: f.getDate() }))}</div>`;
     for (const e of days[d]) list += cardHtml(e);
   }
-  return `<section id="panel" class="card-float" style="top:${P.margin}px;right:${P.margin}px;bottom:${P.margin + bandHeight + P.gap}px;width:${P.panelWidth}px">
+  // Full height: the records panel runs from the top margin to the bottom one.
+  return `<section id="panel" class="card-float" style="top:${P.margin}px;right:${P.margin}px;bottom:${P.margin}px;width:${P.panelWidth}px">
     <div class="ph-head"><div class="tx"><div class="ph-title">${esc(T.title)}</div>
       <div class="ph-sub">${esc(S('panelDates', { dates: tripDates(T), n }))}</div>
       ${companionNames(T).length ? `<div class="ph-sub ph-with"><span class="ms">group</span>${esc(S('companions', { names: companionNames(T).join('、') }))}</div>` : ''}</div>
@@ -797,7 +803,8 @@ function bandHtml(bandHeight, lastDay) {
     }
   }
   const cells = `<div class="track" style="width:${X(totalDays + 1) + PAD}px">${html}</div>`;
-  return `<section id="band" class="card-float" style="left:${P.margin}px;right:${P.margin}px;bottom:${P.margin}px;height:${bandHeight}px">
+  // The band ends where the records panel begins (less the gap between them).
+  return `<section id="band" class="card-float" style="left:${P.margin}px;right:${P.margin + P.panelWidth + P.gap}px;bottom:${P.margin}px;height:${bandHeight}px">
     <div class="bh">${P.t_bandShowTitle ? `<span class="ms ic" style="color:${acc}">timeline</span><span class="ti">${esc(S('bandTitle', { trip: trip().title }))}</span>
       <span class="n">${esc(S('bandCount', { n: tripEntries().length }))}</span>` : ''}<span class="sp"></span>
       <button class="ibtn cmp" data-act="closeTrip" title="${esc(S('close'))}"><span class="ms">close</span></button></div>
